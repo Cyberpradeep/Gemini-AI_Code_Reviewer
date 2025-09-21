@@ -52,7 +52,7 @@ You'll need a Google Gemini API key. You can get one from [Google AI Studio](htt
 Create a new file named `.env` in the root of your project and add your API key:
 
 ```
-API_KEY=your_google_gemini_api_key_here
+API_KEY= add you key from google AI Studio
 ```
 
 ### 4. Run the Development Server
