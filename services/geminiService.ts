@@ -2,11 +2,40 @@
 import { GoogleGenAI, Content } from "@google/genai";
 import { REVIEW_FOCUS_AREAS } from '../constants';
 
-if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable not set");
-}
+// We will hold the initialized client in memory to avoid re-initializing on every call.
+let ai: GoogleGenAI | null = null;
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+/**
+ * Gets the initialized GoogleGenAI client.
+ * On the first call, it fetches the API key from a secure serverless function
+ * and creates a new client instance. Subsequent calls return the cached instance.
+ */
+const getAiClient = async (): Promise<GoogleGenAI> => {
+  if (ai) {
+    return ai;
+  }
+
+  try {
+    const response = await fetch('/api/get-key');
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch API key from server.' }));
+        throw new Error(errorData.error);
+    }
+    const { apiKey } = await response.json();
+
+    if (!apiKey) {
+      throw new Error("API key was not returned from the server.");
+    }
+
+    ai = new GoogleGenAI({ apiKey });
+    return ai;
+  } catch (error) {
+    console.error("Error initializing AI client:", error);
+    // Provide a user-friendly error message that hints at the solution.
+    throw new Error("Could not connect to the AI service. Please ensure the API_KEY is set correctly in your Vercel project settings.");
+  }
+};
+
 
 const generateInitialPrompt = (code: string, language: string, focusAreas: string[]): string => {
   const focusPrompt = focusAreas.length > 0 
@@ -49,7 +78,10 @@ export const sendChatMessage = async (
   focusAreas?: string[]
 ): Promise<{ response: string; updatedHistory: Content[] }> => {
   try {
-    const chat = ai.chats.create({
+    // This now ensures the client is ready before making a request.
+    const aiClient = await getAiClient();
+
+    const chat = aiClient.chats.create({
       model: 'gemini-2.5-flash',
       history,
     });
@@ -65,10 +97,12 @@ export const sendChatMessage = async (
     return { response, updatedHistory };
 
   } catch (error) {
-    console.error("Error calling Gemini API:", error);
-    if (error instanceof Error && error.message.includes('API key not valid')) {
-       throw new Error("Invalid API Key. Please check your configuration.");
+    // Re-throw the error so the UI layer can catch it and display it.
+    // The error from getAiClient will be more informative for the user.
+    if (error instanceof Error) {
+      throw error;
     }
-    throw new Error("Failed to get response from Gemini API.");
+    console.error("An unexpected error occurred in sendChatMessage:", error);
+    throw new Error("An unexpected error occurred while communicating with the AI.");
   }
 };
