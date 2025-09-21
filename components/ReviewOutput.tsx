@@ -194,7 +194,7 @@ const ReviewOutput: React.FC<ReviewOutputProps> = ({ conversation, isLoading, is
        <div className="space-y-6">
         {conversation.map((msg, index) => (
           <div key={index} className={`flex flex-col animate-fade-in ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-            <div className={`max-w-full lg:max-w-[90%] px-5 py-3.5 rounded-2xl ${msg.role === 'user' ? 'bg-cyan-600 text-white' : 'bg-ios-light-header dark:bg-ios-dark-header'}`}>
+            <div className={`max-w-[95%] lg:max-w-[90%] px-5 py-3.5 rounded-2xl ${msg.role === 'user' ? 'bg-cyan-600 text-white' : 'bg-ios-light-header dark:bg-ios-dark-header'}`}>
               {msg.role === 'user' ? (
                 <p className="whitespace-pre-wrap">{msg.content}</p>
               ) : (

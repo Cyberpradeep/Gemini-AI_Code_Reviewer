@@ -246,7 +246,7 @@ const App: React.FC = () => {
           onThemeToggle={handleThemeToggle}
         />
         <div className={`flex-1 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out lg:transform-none ${isSidebarOpen ? 'lg:translate-x-0' : 'lg:translate-x-0'} ${isSidebarOpen && window.innerWidth < 1024 ? 'translate-x-72 scale-90 rounded-2xl overflow-hidden' : 'translate-x-0'}`}>
-          <main className={`flex-grow grid grid-cols-1 lg:grid-cols-2 gap-6 p-4 md:p-6 overflow-y-auto relative transition-opacity duration-500 ${isMounted ? 'opacity-100' : 'opacity-0'} bg-ios-light-bg dark:bg-black`}>
+          <main className={`flex-grow grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 p-4 md:p-6 relative transition-opacity duration-500 ${isMounted ? 'opacity-100' : 'opacity-0'} bg-ios-light-bg dark:bg-black overflow-hidden`}>
             {!isSidebarOpen && (
               <button
                 onClick={toggleSidebar}
@@ -256,7 +256,7 @@ const App: React.FC = () => {
                 <MenuIcon className="h-6 w-6" />
               </button>
             )}
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-1 min-h-0">
               <CodeInput
                 code={code}
                 setCode={setCode}
@@ -269,7 +269,7 @@ const App: React.FC = () => {
                 setReviewFocus={setReviewFocus}
               />
             </div>
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-1 min-h-0">
               <ReviewOutput 
                 conversation={activeConversation}
                 isLoading={isLoading} 

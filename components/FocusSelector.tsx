@@ -55,7 +55,7 @@ const FocusSelector: React.FC<FocusSelectorProps> = ({ options, selectedOptions,
       </button>
 
       {isOpen && (
-        <div className="absolute bottom-full mb-2 w-64 bg-ios-light-panel dark:bg-ios-dark-panel border border-ios-light-tertiary dark:border-ios-dark-tertiary/50 rounded-2xl shadow-xl z-10 animate-fade-in" style={{ animationDuration: '0.2s'}}>
+        <div className="absolute bottom-full mb-2 w-full sm:w-64 bg-ios-light-panel dark:bg-ios-dark-panel border border-ios-light-tertiary dark:border-ios-dark-tertiary/50 rounded-2xl shadow-xl z-10 animate-fade-in" style={{ animationDuration: '0.2s'}}>
           <div className="p-2">
             <div className="flex justify-between items-center px-2 pt-1 pb-2">
                 <p className="text-xs font-semibold text-ios-light-text-secondary dark:text-ios-dark-secondary uppercase">Focus Review On</p>

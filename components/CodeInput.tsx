@@ -83,7 +83,7 @@ const CodeInput: React.FC<CodeInputProps> = ({
 
   return (
     <div className={`bg-ios-light-panel dark:bg-ios-dark-panel rounded-2xl shadow-lg flex flex-col h-full border border-ios-light-tertiary dark:border-ios-dark-tertiary/50 transition-opacity duration-300 ${isLoading ? 'opacity-60 pointer-events-none' : ''}`}>
-      <div className="p-4 border-b border-ios-light-header dark:border-ios-dark-header flex items-center justify-between flex-wrap gap-4">
+      <div className="p-4 border-b border-ios-light-header dark:border-ios-dark-header flex items-center justify-between flex-wrap gap-2 sm:gap-4">
         <h2 className="text-lg font-semibold text-ios-light-text-primary dark:text-white">Your Code</h2>
         <div className="flex items-center gap-2 flex-grow justify-end">
            <input
@@ -120,8 +120,7 @@ const CodeInput: React.FC<CodeInputProps> = ({
           value={code}
           onChange={(e) => setCode(e.target.value)}
           placeholder="Paste your code here or upload a file..."
-          className="w-full h-full bg-transparent text-ios-light-text-secondary dark:text-gray-300 font-mono resize-none focus:outline-none p-4 text-sm leading-relaxed"
-          style={{ minHeight: '400px' }}
+          className="w-full h-full bg-transparent text-ios-light-text-secondary dark:text-gray-300 font-mono resize-none focus:outline-none p-4 text-sm leading-relaxed min-h-[300px] sm:min-h-[400px]"
         />
       </div>
       <div className="p-4 border-t border-ios-light-header dark:border-ios-dark-header flex flex-col sm:flex-row items-center gap-4">

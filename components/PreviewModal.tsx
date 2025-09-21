@@ -29,12 +29,12 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in" style={{ animationDuration: '0.2s' }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in p-4" style={{ animationDuration: '0.2s' }}>
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       ></div>
-      <div className="relative z-10 w-full max-w-4xl h-[90vh] max-h-[800px] bg-ios-light-panel dark:bg-ios-dark-panel rounded-2xl shadow-2xl flex flex-col border border-ios-light-tertiary dark:border-ios-dark-tertiary/50 overflow-hidden">
+      <div className="relative z-10 w-[95vw] max-w-4xl h-full max-h-[90vh] bg-ios-light-panel dark:bg-ios-dark-panel rounded-2xl shadow-2xl flex flex-col border border-ios-light-tertiary dark:border-ios-dark-tertiary/50 overflow-hidden">
         <header className="flex items-center justify-between p-4 border-b border-ios-light-header dark:border-ios-dark-header flex-shrink-0">
           <h2 className="text-lg font-semibold text-ios-light-text-primary dark:text-white">
             Preview Changes
@@ -86,7 +86,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
           </pre>
         </main>
 
-        <footer className="flex items-center justify-end gap-4 p-4 border-t border-ios-light-header dark:border-ios-dark-header flex-shrink-0">
+        <footer className="flex items-center justify-center sm:justify-end flex-wrap gap-4 p-4 border-t border-ios-light-header dark:border-ios-dark-header flex-shrink-0">
           <button
             onClick={onClose}
             className="bg-ios-light-header dark:bg-ios-dark-header hover:bg-ios-light-tertiary dark:hover:bg-ios-dark-tertiary text-ios-light-text-primary dark:text-white font-bold py-2 px-4 rounded-full transition-colors"
