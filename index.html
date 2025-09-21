@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Code Reviewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              // Light & Dark theme colors using CSS variables
+              'ios': {
+                light: {
+                  bg: '#F9F9F9',
+                  panel: '#FFFFFF',
+                  header: '#F0F0F0',
+                  secondary: '#8A8A8E',
+                  tertiary: '#E5E5EA',
+                  'text-primary': '#000000',
+                  'text-secondary': '#636366',
+                },
+                dark: {
+                  bg: '#000000',
+                  panel: '#1C1C1E',
+                  header: '#2C2C2E',
+                  secondary: '#8E8E93',
+                  tertiary: '#48484A',
+                  'text-primary': '#FFFFFF',
+                  'text-secondary': '#A0A0A5',
+                }
+              }
+            },
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              mono: ['Fira Code', 'monospace'],
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.4s ease-in-out',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0', transform: 'translateY(8px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+            }
+          },
+        },
+      }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.20.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/"
+  }
+}
+</script>
+</head>
+  <body class="bg-ios-light-bg dark:bg-black text-ios-light-text-primary dark:text-white font-sans">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
