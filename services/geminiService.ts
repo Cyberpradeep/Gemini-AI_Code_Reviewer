@@ -1,5 +1,6 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Content } from "@google/genai";
+import { REVIEW_FOCUS_AREAS } from '../constants';
 
 if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable not set");
@@ -7,19 +8,30 @@ if (!process.env.API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const generatePrompt = (code: string, language: string): string => {
+const generateInitialPrompt = (code: string, language: string, focusAreas: string[]): string => {
+  const focusPrompt = focusAreas.length > 0 
+    ? `Your review should focus specifically on these areas: ${focusAreas.join(', ')}.`
+    : `Your review should cover these key areas: ${REVIEW_FOCUS_AREAS.join(', ')}.`;
+  
   return `Act as a world-class senior software engineer and an expert in ${language}.
 Your task is to provide a thorough and constructive code review of the following code snippet.
 
-Your review should cover these key areas:
-1.  **Correctness & Bugs:** Identify any potential bugs, logical errors, or edge cases that are not handled.
-2.  **Best Practices & Readability:** Suggest improvements for code style, clarity, naming conventions, and overall structure. Adhere to the idiomatic conventions of ${language}.
-3.  **Performance:** Point out any performance bottlenecks or suggest more efficient alternatives.
-4.  **Security:** Highlight any potential security vulnerabilities (e.g., injection attacks, data exposure).
-5.  **Maintainability:** Comment on how easy the code is to understand, modify, and extend. Suggest refactoring if necessary.
+${focusPrompt}
 
 Provide your feedback in Markdown format. Use code blocks (\`\`\`) for examples and syntax highlighting.
-Start with a brief, high-level summary of the code's quality, then provide a list of specific, actionable suggestions. For each suggestion, explain the problem and the proposed solution clearly.
+Start with a brief, high-level summary of the code's quality, then provide a list of specific, actionable suggestions.
+
+IMPORTANT: For any suggestions that involve changing the code, you MUST provide them in the following structured format. This is critical for the application to parse your response. Do not include this format for suggestions that are purely conceptual.
+
+**Suggestion: [A brief, clear title for the change]**
+> **Before:**
+> \`\`\`${language}
+> // The original code snippet that should be replaced
+> \`\`\`
+> **After:**
+> \`\`\`${language}
+> // The new, improved code snippet
+> \`\`\`
 
 Here is the code to review:
 \`\`\`${language}
@@ -28,18 +40,36 @@ ${code}
 `;
 };
 
-export const reviewCode = async (code: string, language: string): Promise<string> => {
-  const prompt = generatePrompt(code, language);
 
+export const sendChatMessage = async (
+  message: string,
+  history: Content[],
+  isNewReview: boolean,
+  code?: string,
+  language?: string,
+  focusAreas?: string[]
+): Promise<{ response: string; updatedHistory: Content[] }> => {
   try {
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt
+    const chat = ai.chats.create({
+      model: 'gemini-2.5-flash',
+      history,
     });
-    
-    return response.text;
+
+    const prompt = isNewReview && code && language && focusAreas
+      ? generateInitialPrompt(code, language, focusAreas)
+      : message;
+
+    const result = await chat.sendMessage({ message: prompt });
+    const response = result.text;
+    const updatedHistory = await chat.getHistory();
+
+    return { response, updatedHistory };
+
   } catch (error) {
     console.error("Error calling Gemini API:", error);
-    throw new Error("Failed to get review from Gemini API.");
+    if (error instanceof Error && error.message.includes('API key not valid')) {
+       throw new Error("Invalid API Key. Please check your configuration.");
+    }
+    throw new Error("Failed to get response from Gemini API.");
   }
 };

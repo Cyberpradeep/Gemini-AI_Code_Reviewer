@@ -15,3 +15,11 @@ export const SUPPORTED_LANGUAGES = [
 ];
 
 export const HISTORY_STORAGE_KEY = 'aiCodeReviewerHistory';
+
+export const REVIEW_FOCUS_AREAS = [
+  'Correctness & Bugs',
+  'Best Practices & Readability',
+  'Performance',
+  'Security',
+  'Maintainability',
+];

@@ -1,5 +1,7 @@
 import React, { useRef } from 'react';
 import { UploadIcon } from './icons/UploadIcon';
+import FocusSelector from './FocusSelector';
+import { REVIEW_FOCUS_AREAS } from '../constants';
 
 interface Language {
   value: string;
@@ -14,6 +16,8 @@ interface CodeInputProps {
   languages: Language[];
   onSubmit: () => void;
   isLoading: boolean;
+  reviewFocus: string[];
+  setReviewFocus: (focus: string[]) => void;
 }
 
 const languageMap: Record<string, string> = {
@@ -44,6 +48,8 @@ const CodeInput: React.FC<CodeInputProps> = ({
   languages,
   onSubmit,
   isLoading,
+  reviewFocus,
+  setReviewFocus,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -77,9 +83,9 @@ const CodeInput: React.FC<CodeInputProps> = ({
 
   return (
     <div className={`bg-ios-light-panel dark:bg-ios-dark-panel rounded-2xl shadow-lg flex flex-col h-full border border-ios-light-tertiary dark:border-ios-dark-tertiary/50 transition-opacity duration-300 ${isLoading ? 'opacity-60 pointer-events-none' : ''}`}>
-      <div className="p-4 border-b border-ios-light-header dark:border-ios-dark-header flex items-center justify-between gap-4">
+      <div className="p-4 border-b border-ios-light-header dark:border-ios-dark-header flex items-center justify-between flex-wrap gap-4">
         <h2 className="text-lg font-semibold text-ios-light-text-primary dark:text-white">Your Code</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-grow justify-end">
            <input
             type="file"
             ref={fileInputRef}
@@ -93,7 +99,7 @@ const CodeInput: React.FC<CodeInputProps> = ({
             aria-label="Upload a code file"
           >
             <UploadIcon className="h-4 w-4" />
-            Upload
+            <span className="hidden sm:inline">Upload</span>
           </button>
           <select
             value={language}
@@ -118,11 +124,16 @@ const CodeInput: React.FC<CodeInputProps> = ({
           style={{ minHeight: '400px' }}
         />
       </div>
-      <div className="p-4 border-t border-ios-light-header dark:border-ios-dark-header">
+      <div className="p-4 border-t border-ios-light-header dark:border-ios-dark-header flex flex-col sm:flex-row items-center gap-4">
+        <FocusSelector 
+          options={REVIEW_FOCUS_AREAS}
+          selectedOptions={reviewFocus}
+          onChange={setReviewFocus}
+        />
         <button
           onClick={onSubmit}
           disabled={isLoading || !code.trim()}
-          className="w-full bg-cyan-600 hover:bg-cyan-700 disabled:bg-ios-light-header dark:disabled:bg-ios-dark-header disabled:text-ios-light-text-secondary dark:disabled:text-ios-dark-secondary disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-full transition-colors duration-200 flex items-center justify-center text-base"
+          className="w-full sm:w-auto bg-cyan-600 hover:bg-cyan-700 disabled:bg-ios-light-header dark:disabled:bg-ios-dark-header disabled:text-ios-light-text-secondary dark:disabled:text-ios-dark-secondary disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-full transition-colors duration-200 flex items-center justify-center text-base flex-grow"
         >
           {isLoading ? 'Analyzing...' : 'Review Code'}
         </button>
