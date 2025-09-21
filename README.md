@@ -4,19 +4,21 @@ An automated code review tool that uses the Google Gemini API to analyze your co
 
 **[View the Live Demo](https://gemini-ai-code-reviewer.vercel.app/)**
 
-![AI Code Reviewer Screenshot](https://storage.googleapis.com/aistudio-o-images/project_showcase/17e293a3-a800-4752-921c-43f140654c60.png)
+<img width="1919" height="916" alt="image" src="https://github.com/user-attachments/assets/34ffe3c1-8013-440d-82c7-32e9d4d9c262" />
+<img width="1906" height="911" alt="image" src="https://github.com/user-attachments/assets/da3f38cd-8e59-4a03-ac10-7fb87cace2c4" />
+
 
 ## Key Features
 
-- ** AI-Powered Feedback:** Get instant, detailed code reviews from the Gemini API.
-- ** Multi-Language Support:** Works with JavaScript, Python, TypeScript, Java, C#, Go, and more.
-- ** Focused Reviews:** Select specific areas like Performance, Security, or Best Practices to guide the AI's analysis.
-- ** Interactive Chat:** Ask follow-up questions to clarify suggestions and dive deeper into the code.
-- ** Code Diff Preview:** See a clear, color-coded before-and-after comparison of suggested changes.
-- ** One-Click Apply:** Instantly apply code fixes directly to your input with a single click.
-- ** Review History:** Your past reviews are saved in your browser's local storage for easy access.
-- ** Export Conversation:** Download your full code review conversation as a Markdown or plain text file.
-- ** Responsive Design:** A clean, modern UI that works beautifully on both desktop and mobile devices.
+- **AI-Powered Feedback:** Get instant, detailed code reviews from the Gemini API.
+- **Multi-Language Support:** Works with JavaScript, Python, TypeScript, Java, C#, Go, and more.
+- **Focused Reviews:** Select specific areas like Performance, Security, or Best Practices to guide the AI's analysis.
+- **Interactive Chat:** Ask follow-up questions to clarify suggestions and dive deeper into the code.
+- **Code Diff Preview:** See a clear, color-coded before-and-after comparison of suggested changes.
+- **One-Click Apply:** Instantly apply code fixes directly to your input with a single click.
+- **Review History:** Your past reviews are saved in your browser's local storage for easy access.
+- **Export Conversation:** Download your full code review conversation as a Markdown or plain text file.
+- **Responsive Design:** A clean, modern UI that works beautifully on both desktop and mobile devices.
 
 ## Tech Stack
 
@@ -35,8 +37,8 @@ To run this project locally, you'll need to have Node.js and the [Vercel CLI](ht
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/ai-code-reviewer.git
-cd ai-code-reviewer
+git clone https://github.com/Cyberpradeep/Gemini-AI_Code_Reviewer.git
+cd Gemini-AI_Code_Reviewer
 ```
 
 ### 2. Install Dependencies
