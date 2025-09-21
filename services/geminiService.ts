@@ -13,13 +13,12 @@ const generateInitialPrompt = (code: string, language: string, focusAreas: strin
     ? `Your review should focus specifically on these areas: ${focusAreas.join(', ')}.`
     : `Your review should cover these key areas: ${REVIEW_FOCUS_AREAS.join(', ')}.`;
   
-  return `Act as a world-class senior software engineer and an expert in ${language}.
-Your task is to provide a thorough and constructive code review of the following code snippet.
+  return `Act as a friendly and helpful programming assistant who is an expert in ${language}. Your goal is to review the following code snippet and explain your suggestions in simple, easy-to-understand words. Avoid jargon where possible, and be encouraging!
 
 ${focusPrompt}
 
-Provide your feedback in Markdown format. Use code blocks (\`\`\`) for examples and syntax highlighting.
-Start with a brief, high-level summary of the code's quality, then provide a list of specific, actionable suggestions.
+Provide your feedback in Markdown format. Use code blocks (\`\`\`) for examples.
+Start with a friendly, high-level summary of what the code does well. Then, offer a list of clear, actionable suggestions for improvement.
 
 IMPORTANT: For any suggestions that involve changing the code, you MUST provide them in the following structured format. This is critical for the application to parse your response. Do not include this format for suggestions that are purely conceptual.
 
@@ -33,7 +32,7 @@ IMPORTANT: For any suggestions that involve changing the code, you MUST provide 
 > // The new, improved code snippet
 > \`\`\`
 
-Here is the code to review:
+Here is the code to review. Let's take a look together!
 \`\`\`${language}
 ${code}
 \`\`\`
