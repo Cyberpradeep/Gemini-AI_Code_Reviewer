@@ -112,7 +112,7 @@ const CodeInput: React.FC<CodeInputProps> = ({
 
   return (
     <>
-      <div className="bg-light-bg-elevated/80 dark:bg-dark-bg-elevated/80 backdrop-blur-xl rounded-2xl shadow-lg flex flex-col border border-light-separator dark:border-dark-separator overflow-hidden">
+      <div className="bg-light-bg-elevated/80 dark:bg-dark-bg-elevated/80 backdrop-blur-xl rounded-2xl shadow-lg flex flex-col border border-light-separator dark:border-dark-separator overflow-hidden h-full">
         <header className="p-3 border-b border-light-separator dark:border-dark-separator flex items-center justify-between flex-wrap gap-2 h-16">
             <div className="flex items-center gap-2">
                 <button onClick={onMenuClick} className="lg:hidden p-2 -ml-1 rounded-full text-light-label-secondary dark:text-dark-label-secondary hover:bg-light-fill-primary dark:hover:bg-dark-fill-primary">
