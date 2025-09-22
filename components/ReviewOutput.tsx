@@ -48,7 +48,7 @@ const SuggestionBlock: React.FC<{
   <div className="my-4 space-y-4">
     <div>
       <p className="text-xs font-medium text-red-700 dark:text-red-400 mb-1.5">BEFORE</p>
-      <div className="relative group rounded-lg overflow-hidden bg-red-500/5 dark:bg-red-500/10 border border-red-500/10 dark:border-red-500/20">
+      <div className="relative group rounded-lg overflow-hidden bg-red-100 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
         <SyntaxHighlighter
           language={language}
           style={syntaxTheme}
@@ -82,7 +82,7 @@ const SuggestionBlock: React.FC<{
           </button>
         </div>
       </div>
-      <div className="relative group rounded-lg overflow-hidden bg-green-500/5 dark:bg-green-500/10 border border-green-500/10 dark:border-green-500/20">
+      <div className="relative group rounded-lg overflow-hidden bg-green-100 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20">
         <SyntaxHighlighter
           language={language}
           style={syntaxTheme}
