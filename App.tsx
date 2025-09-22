@@ -186,14 +186,17 @@ const App: React.FC = () => {
   const handleSendMessage = useCallback(async (message: string) => {
     if (!message.trim()) return;
 
-    const newConversation: ChatMessage[] = [...conversation, { role: 'user', content: message }];
+    // FIX: Explicitly create message objects to ensure correct typing and prevent type widening on the 'role' property.
+    const userMessage: ChatMessage = { role: 'user', content: message };
+    const newConversation = [...conversation, userMessage];
     setConversation(newConversation);
     setIsChatting(true);
     setError(null);
     
     try {
       const { response, updatedHistory } = await sendFollowUpMessage(message, chatHistory);
-      const finalConversation = [...newConversation, { role: 'model', content: response }];
+      const modelMessage: ChatMessage = { role: 'model', content: response };
+      const finalConversation = [...newConversation, modelMessage];
       setConversation(finalConversation);
       setChatHistory(updatedHistory);
       // Determine files to save from current state

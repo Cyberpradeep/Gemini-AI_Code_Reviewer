@@ -29,7 +29,7 @@ An automated code review tool that uses the Google Gemini API to analyze your co
 
 ## Getting Started
 
-This project is a client-side web application built with React and TypeScript. To run or deploy it, you will need a Google Gemini API key.
+This project is a client-side web application that uses a serverless backend function (included in the `/api` directory) to securely handle the API key.
 
 ### 1. Get a Gemini API Key
 
@@ -37,7 +37,7 @@ You can get an API key from [Google AI Studio](https://aistudio.google.com/app/a
 
 ### 2. Configure Environment Variables
 
-The application expects the API key to be available as an environment variable named `API_KEY` in the environment where it's deployed. This is a security best practice to avoid hardcoding keys in the source code.
+The application's backend function expects the API key to be available as an environment variable named `API_KEY` in the deployment environment. This is a security best practice to avoid exposing your key on the client-side.
 
 ---
 
@@ -46,9 +46,10 @@ The application expects the API key to be available as an environment variable n
 Deploying this application to Vercel is straightforward.
 
 1.  **Push to Git:** Make sure your project is on a Git provider like GitHub, GitLab, or Bitbucket.
-2.  **Import Project:** In your Vercel dashboard, click "Add New..." -> "Project" and import your Git repository. Vercel should automatically detect that it's a React/Vite project.
+2.  **Import Project:** In your Vercel dashboard, click "Add New..." -> "Project" and import your Git repository. Vercel should automatically detect that it's a Vite project.
 3.  **Configure Environment Variable:**
-    -   Navigate to the project's **Settings** tab.
+    -   Navigate to your project's **Settings** tab in Vercel.
     -   Go to the **Environment Variables** section.
-    -   Add a new variable with the name `API_KEY` and paste your Google Gemini API key as the value. Ensure the variable is available to the frontend.
-4.  **Deploy:** Click the "Deploy" button. Vercel will automatically build and deploy your application.
+    -   Add a new variable with the name `API_KEY` and paste your Google Gemini API key as the value.
+    -   **Important:** Ensure the variable is **NOT** exposed to the browser. Vercel will automatically make it available to the backend API functions in the `/api` directory, which is the intended secure setup for this project.
+4.  **Deploy:** Click the "Deploy" button. Vercel will automatically build your frontend and deploy the serverless functions.
