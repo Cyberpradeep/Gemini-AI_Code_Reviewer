@@ -183,7 +183,7 @@ const ReviewOutput: React.FC<ReviewOutputProps> = ({ conversation, isLoading, is
         {isChatting && (
             <div className="flex justify-start">
                 <div className="px-5 py-3.5 rounded-2xl bg-ios-light-header dark:bg-ios-dark-header">
-                    <Spinner />
+                    <Spinner className="h-6 w-6" />
                 </div>
             </div>
         )}

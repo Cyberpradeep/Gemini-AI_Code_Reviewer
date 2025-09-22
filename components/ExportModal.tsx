@@ -16,6 +16,7 @@ import { MarkdownIcon } from './icons/MarkdownIcon';
 import { PdfIcon } from './icons/PdfIcon';
 import { JsonIcon } from './icons/JsonIcon';
 import { HtmlIcon } from './icons/HtmlIcon';
+import Spinner from './Spinner';
 
 type ExportFormat = 'md' | 'txt' | 'pdf' | 'json' | 'html';
 
@@ -251,8 +252,22 @@ const ExportModal: React.FC<ExportModalProps> = ({
             <button onClick={onClose} className="bg-ios-light-header dark:bg-ios-dark-header hover:bg-ios-light-tertiary dark:hover:bg-ios-dark-tertiary text-ios-light-text-primary dark:text-white font-bold py-2 px-4 rounded-full transition-colors">
               Cancel
             </button>
-            <button onClick={handleExport} disabled={isExporting} className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 text-white font-bold py-2 px-4 rounded-full transition-colors flex items-center gap-2 min-w-[120px] justify-center">
-              {isExporting ? 'Exporting...' : <><DownloadIcon className="h-5 w-5" /> Export</>}
+            <button
+              onClick={handleExport}
+              disabled={isExporting}
+              className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-wait text-white font-bold py-2 px-4 rounded-full transition-colors flex items-center gap-2 min-w-[120px] justify-center"
+            >
+              {isExporting ? (
+                <>
+                  <Spinner className="h-5 w-5" />
+                  <span>Exporting...</span>
+                </>
+              ) : (
+                <>
+                  <DownloadIcon className="h-5 w-5" />
+                  <span>Export</span>
+                </>
+              )}
             </button>
           </footer>
         </div>
