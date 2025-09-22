@@ -81,7 +81,7 @@ export const performCodeReview = async (
 
     const resultStream = await aiClient.models.generateContentStream({
         model: 'gemini-2.5-flash',
-        contents: userPrompt,
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         config: {
             systemInstruction: personaInstruction,
         },
@@ -191,7 +191,7 @@ const generateAiAction = async (
 
     const result = await aiClient.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: userPrompt,
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         config: {
             systemInstruction: personaInstruction,
         },
