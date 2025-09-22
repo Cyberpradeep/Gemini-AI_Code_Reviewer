@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, Content } from "@google/genai";
 import { REVIEW_FOCUS_AREAS } from '../constants';
 
@@ -39,17 +40,21 @@ const getAiClient = async (): Promise<GoogleGenAI> => {
 
 const generateInitialPrompt = (code: string, language: string, focusAreas: string[]): string => {
   const focusPrompt = focusAreas.length > 0 
-    ? `Your review should focus specifically on these areas: ${focusAreas.join(', ')}.`
-    : `Your review should cover these key areas: ${REVIEW_FOCUS_AREAS.join(', ')}.`;
+    ? `Please pay special attention to these areas: ${focusAreas.join(', ')}.`
+    : `Take a look at things like: ${REVIEW_FOCUS_AREAS.join(', ')}.`;
   
-  return `Act as a friendly and helpful programming assistant who is an expert in ${language}. Your goal is to review the following code snippet and explain your suggestions in simple, easy-to-understand words. Avoid jargon where possible, and be encouraging!
+  return `Act as a super friendly and encouraging coding buddy. Your goal is to review the following code snippet and explain your suggestions in a simple, conversational, and helpful way. Imagine you're pair-programming with a friend. Be positive, avoid jargon, and never sound bossy or overly formal.
+
+When reviewing the ${language} code:
+1.  Start with a cheerful and positive summary.
+2.  Explain suggestions clearly and simply.
+3.  Be encouraging throughout your review!
 
 ${focusPrompt}
 
 Provide your feedback in Markdown format. Use code blocks (\`\`\`) for examples.
-Start with a friendly, high-level summary of what the code does well. Then, offer a list of clear, actionable suggestions for improvement.
 
-IMPORTANT: For any suggestions that involve changing the code, you MUST provide them in the following structured format. This is critical for the application to parse your response. Do not include this format for suggestions that are purely conceptual.
+IMPORTANT: For any suggestions that involve changing the code, you MUST provide them in the following structured format. This is critical for the application to parse your response.
 
 **Suggestion: [A brief, clear title for the change]**
 > **Before:**
@@ -61,7 +66,7 @@ IMPORTANT: For any suggestions that involve changing the code, you MUST provide 
 > // The new, improved code snippet
 > \`\`\`
 
-Here is the code to review. Let's take a look together!
+Alright, let's take a look at this code together!
 \`\`\`${language}
 ${code}
 \`\`\`
