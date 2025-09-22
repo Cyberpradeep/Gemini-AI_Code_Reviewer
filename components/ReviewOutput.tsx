@@ -12,6 +12,7 @@ import ExportModal from './ExportModal';
 import { ApplyIcon } from './icons/ApplyIcon';
 import { EyeIcon } from './icons/EyeIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
+import CopyButton from './CopyButton';
 
 
 interface ReviewOutputProps {
@@ -42,9 +43,14 @@ const SuggestionBlock: React.FC<{
     <div className="space-y-4">
       <div>
         <p className="text-sm font-medium text-ios-light-text-secondary dark:text-ios-dark-secondary mb-2">Before:</p>
-        <SyntaxHighlighter language={segment.language} style={syntaxTheme} customStyle={{ margin: 0, padding: '1rem', backgroundColor: codeBgColor, borderRadius: '0.5rem' }} codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }}>
-          {segment.before || ''}
-        </SyntaxHighlighter>
+        <div className="relative group">
+          <SyntaxHighlighter language={segment.language} style={syntaxTheme} customStyle={{ margin: 0, padding: '1rem', backgroundColor: codeBgColor, borderRadius: '0.5rem' }} codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }}>
+            {segment.before || ''}
+          </SyntaxHighlighter>
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <CopyButton textToCopy={segment.before || ''} />
+          </div>
+        </div>
       </div>
       <div>
         <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
@@ -66,9 +72,14 @@ const SuggestionBlock: React.FC<{
                 </button>
             </div>
         </div>
-        <SyntaxHighlighter language={segment.language} style={syntaxTheme} customStyle={{ margin: 0, padding: '1rem', backgroundColor: codeBgColor, borderRadius: '0.5rem' }} codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }}>
-          {segment.after || ''}
-        </SyntaxHighlighter>
+        <div className="relative group">
+            <SyntaxHighlighter language={segment.language} style={syntaxTheme} customStyle={{ margin: 0, padding: '1rem', backgroundColor: codeBgColor, borderRadius: '0.5rem' }} codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }}>
+              {segment.after || ''}
+            </SyntaxHighlighter>
+             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <CopyButton textToCopy={segment.after || ''} />
+            </div>
+        </div>
       </div>
     </div>
   </div>
@@ -88,10 +99,16 @@ const ReviewMessage: React.FC<{ message: string; theme: Theme; onApplyFix: (befo
       code: ({node, inline, className, children, ...props}) => {
         const match = /language-(\w+)/.exec(className || '');
         if (!inline && match) {
+          const codeString = String(children).replace(/\n$/, '');
           return (
-            <SyntaxHighlighter style={syntaxTheme} language={match[1]} PreTag="div" customStyle={{ margin: '0.5rem 0', padding: '1rem', backgroundColor: codeBgColor, borderRadius: '0.5rem' }} codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }} {...props}>
-              {String(children).replace(/\n$/, '')}
-            </SyntaxHighlighter>
+            <div className="relative group my-4">
+              <SyntaxHighlighter style={syntaxTheme} language={match[1]} PreTag="div" customStyle={{ padding: '1rem', backgroundColor: codeBgColor, borderRadius: '0.5rem' }} codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }} {...props}>
+                {codeString}
+              </SyntaxHighlighter>
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <CopyButton textToCopy={codeString} />
+              </div>
+            </div>
           );
         }
         return <code className="bg-ios-light-header dark:bg-ios-dark-header text-cyan-700 dark:text-cyan-300 rounded-md px-1.5 py-1 font-mono text-sm" {...props}>{children}</code>;
