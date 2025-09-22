@@ -41,26 +41,30 @@ const generateStreamReviewPrompt = (files: ProjectFile[], focusAreas: string[]):
     ? `Please pay special attention to these areas: ${focusAreas.join(', ')}.`
     : `Analyze all aspects of the code, including: ${REVIEW_FOCUS_AREAS.join(', ')}.`;
 
-  return `Please perform a holistic code review of the following ${reviewSubject}. Analyze the code for bugs, performance issues, security vulnerabilities, and adherence to best practices. For projects with multiple files, consider the interactions between them.
+  return `You are an AI code reviewer. Your task is to analyze the provided code and stream back your findings as a series of individual JSON objects.
 ${focusPrompt}
 
-Your entire response must be a stream of individual JSON objects, with each object separated by a newline. Each JSON object represents a single finding and MUST conform to this exact schema:
-{
-  "category": "string (one of: ${REVIEW_FOCUS_AREAS.join(', ')})",
-  "severity": "string (one of: 'Critical', 'High', 'Medium', 'Low', 'Info')",
-  "title": "string",
-  "summary": "string (in Markdown format)",
-  "filePath": "string",
-  "suggestion": { "before": "string", "after": "string" } | null,
-  "learnMoreUrl": "string" | null
-}
+**CRITICAL INSTRUCTIONS:**
+1.  **JSON ONLY:** Your entire output MUST be a stream of valid JSON objects. Nothing else. No conversational text, no introductions, no summaries, no markdown formatting like \`\`\`json.
+2.  **ONE OBJECT PER LINE:** Each JSON object must be a single, minified line of text, separated by a newline.
+3.  **IMMEDIATE STREAMING:** Begin streaming the JSON objects immediately without any preamble.
+4.  **SCHEMA ADHERENCE:** Every JSON object MUST strictly conform to this exact TypeScript interface:
+    \`\`\`typescript
+    interface ReviewFinding {
+      category: "${REVIEW_FOCUS_AREAS.join('" | "')}";
+      severity: "Critical" | "High" | "Medium" | "Low" | "Info";
+      title: string;
+      summary: string; // Markdown format is allowed here
+      filePath: string;
+      suggestion?: {
+        before: string;
+        after: string;
+      };
+      learnMoreUrl?: string;
+    }
+    \`\`\`
 
-IMPORTANT:
-- Each JSON object MUST be a single, minified line of text. DO NOT use pretty-print formatting.
-- DO NOT wrap the output in a JSON array or use commas between objects.
-- DO NOT output ANY other text, introductions, summaries, or markdown formatting like \`\`\`json before or after the stream.
-
-Start streaming the JSON objects immediately.
+Now, review the following ${reviewSubject}.
 
 ${fileHeader}
 ${formatProjectFiles(files)}
@@ -89,14 +93,21 @@ export const performCodeReview = async (
     for await (const chunk of resultStream) {
         buffer += chunk.text;
         
-        let lastProcessedIndex = 0;
         while (true) {
-            const startIndex = buffer.indexOf('{', lastProcessedIndex);
-            if (startIndex === -1) break;
+            const startIndex = buffer.indexOf('{');
+            if (startIndex === -1) {
+                // No start of a JSON object found, can break and wait for more data
+                break;
+            }
+
+            // Discard any text before the first '{' (e.g., conversational filler)
+            if (startIndex > 0) {
+                buffer = buffer.substring(startIndex);
+            }
 
             let braceCount = 1;
             let endIndex = -1;
-            for (let i = startIndex + 1; i < buffer.length; i++) {
+            for (let i = 1; i < buffer.length; i++) {
                 if (buffer[i] === '{') braceCount++;
                 else if (buffer[i] === '}') braceCount--;
                 
@@ -107,34 +118,21 @@ export const performCodeReview = async (
             }
 
             if (endIndex !== -1) {
-                const jsonString = buffer.substring(startIndex, endIndex + 1);
+                const jsonString = buffer.substring(0, endIndex + 1);
                 try {
                     const finding = JSON.parse(jsonString) as ReviewFinding;
                     onChunkReceived(finding);
-                    lastProcessedIndex = endIndex + 1;
+                    // Move buffer past the processed object
+                    buffer = buffer.substring(endIndex + 1);
                 } catch (e) {
                     console.warn("Could not parse streamed JSON object:", jsonString, e);
-                    lastProcessedIndex = startIndex + 1; // Skip malformed start
+                    // Skip the malformed opening brace and try to find the next object
+                    buffer = buffer.substring(1); 
                 }
             } else {
                 // Incomplete object, wait for more data
                 break;
             }
-        }
-
-        if (lastProcessedIndex > 0) {
-            buffer = buffer.substring(lastProcessedIndex);
-        }
-    }
-
-    // Final cleanup and parse for any remaining buffer content
-    const cleanedBuffer = buffer.replace(/```/g, '').trim();
-    if (cleanedBuffer.startsWith('{') && cleanedBuffer.endsWith('}')) {
-        try {
-            const finding = JSON.parse(cleanedBuffer) as ReviewFinding;
-            onChunkReceived(finding);
-        } catch (e) {
-            console.warn("Could not parse final buffered JSON object:", cleanedBuffer, e);
         }
     }
 
