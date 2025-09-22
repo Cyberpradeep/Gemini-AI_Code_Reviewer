@@ -2,7 +2,9 @@
 
 An automated code review tool that uses the Google Gemini API to analyze your code and provide detailed feedback on correctness, performance, security, and best practices.
 
-**[Website URL](www.aicodereviewer.dev)**
+**[Website Link](aicodereviewer.dev)**
+
+**[View the Live Demo](https://gemini-ai-code-reviewer.vercel.app/)**
 
 <img width="1919" height="916" alt="image" src="https://github.com/user-attachments/assets/34ffe3c1-8013-440d-82c7-32e9d4d9c262" />
 <img width="1906" height="911" alt="image" src="https://github.com/user-attachments/assets/da3f38cd-8e59-4a03-ac10-7fb87cace2c4" />
