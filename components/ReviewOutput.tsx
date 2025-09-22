@@ -171,7 +171,10 @@ const ReviewOutput: React.FC<ReviewOutputProps> = ({ conversation, isLoading, is
   }, [isLoading]);
 
   const renderContent = () => {
-    if (isLoading) {
+    const firstMessageContent = conversation[0]?.content;
+    const hasContent = conversation.length > 0 && Array.isArray(firstMessageContent) && firstMessageContent.length > 0;
+
+    if (isLoading && !hasContent) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-light-label-secondary dark:text-dark-label-secondary">
           <Spinner />
@@ -192,7 +195,7 @@ const ReviewOutput: React.FC<ReviewOutputProps> = ({ conversation, isLoading, is
       );
     }
 
-    if (conversation.length === 0) {
+    if (!hasContent && !isLoading) {
       return (
         <div className="flex items-center justify-center h-full text-light-label-secondary dark:text-dark-label-secondary">
           <div className="text-center">
@@ -254,6 +257,12 @@ const ReviewOutput: React.FC<ReviewOutputProps> = ({ conversation, isLoading, is
             </div>
           </div>
         ))}
+        {isLoading && hasContent && (
+             <div className="flex items-center p-4 animate-fade-in">
+                <Spinner className="h-6 w-6" />
+                <p className="ml-3 text-sm text-light-label-secondary dark:text-dark-label-secondary">AI is thinking...</p>
+            </div>
+        )}
         {isChatting && (
             <div className="flex justify-start">
                 <div className="p-3.5 rounded-2xl bg-light-fill-primary dark:bg-dark-fill-primary">

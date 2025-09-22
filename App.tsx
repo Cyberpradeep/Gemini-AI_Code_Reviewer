@@ -98,7 +98,11 @@ const App: React.FC = () => {
   }, []);
 
   const saveToHistory = useCallback((updatedConversation: ChatMessage[], files: ProjectFile[]) => {
-    if (files.length === 0) return;
+    if (files.length === 0 || updatedConversation.length === 0) return;
+
+    // Ensure the conversation has content to save
+    const firstMessage = updatedConversation[0];
+    if(Array.isArray(firstMessage.content) && firstMessage.content.length === 0) return;
     
     const newItem: HistoryItem = {
       id: currentHistoryId || crypto.randomUUID(),
@@ -141,16 +145,41 @@ const App: React.FC = () => {
     setChatHistory([]);
     
     const personaInstruction = AI_PERSONAS.find(p => p.value === persona)?.instruction || '';
+    let userPromptForHistory = '';
+    const collectedFindings: ReviewFinding[] = [];
 
     try {
-      const { response, userPrompt } = await performCodeReview(filesToReview, focusAreas, personaInstruction);
-      const newConversation: ChatMessage[] = [{ role: 'model', content: response, prompt: userPrompt }];
-      setConversation(newConversation);
-      saveToHistory(newConversation, filesToReview);
+      // Initialize conversation for streaming UI
+      setConversation([{ role: 'model', content: [] }]);
+
+      const { userPrompt } = await performCodeReview(
+          filesToReview, 
+          focusAreas, 
+          personaInstruction,
+          (finding) => { // onChunkReceived callback
+              collectedFindings.push(finding);
+              setConversation(prev => {
+                  const newConversation = [...prev];
+                  const firstMessage = newConversation[0];
+                  if (firstMessage && firstMessage.role === 'model' && Array.isArray(firstMessage.content)) {
+                      // We are sure `content` is ReviewFinding[] here
+                      firstMessage.content = [...(firstMessage.content as ReviewFinding[]), finding];
+                  }
+                  return newConversation;
+              });
+          }
+      );
+      userPromptForHistory = userPrompt;
     } catch (err: any) {
       setError(err.message || 'An unknown error occurred.');
+      setConversation([]); // Clear partial results on error
     } finally {
       setIsLoading(false);
+      // Save the complete conversation to history once streaming is done
+      if (collectedFindings.length > 0) {
+        const finalConversation: ChatMessage[] = [{ role: 'model', content: collectedFindings, prompt: userPromptForHistory }];
+        saveToHistory(finalConversation, filesToReview);
+      }
     }
   }, [inputMode, code, projectFiles, language, focusAreas, persona, saveToHistory]);
 

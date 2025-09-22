@@ -1,4 +1,4 @@
-import { GoogleGenAI, Content, Type } from "@google/genai";
+import { GoogleGenAI, Content } from "@google/genai";
 import { REVIEW_FOCUS_AREAS } from '../constants';
 import type { ReviewFinding, ProjectFile } from '../App';
 
@@ -23,32 +23,6 @@ const getAiClient = async (): Promise<GoogleGenAI> => {
   }
 };
 
-const reviewSchema = {
-    type: Type.ARRAY,
-    items: {
-        type: Type.OBJECT,
-        properties: {
-            category: { type: Type.STRING, enum: REVIEW_FOCUS_AREAS, description: "The category of the finding." },
-            severity: { type: Type.STRING, enum: ['Critical', 'High', 'Medium', 'Low', 'Info'], description: "The severity of the issue." },
-            title: { type: Type.STRING, description: "A short, descriptive title for the finding." },
-            summary: { type: Type.STRING, description: "A clear and simple explanation of the issue and why it matters. This should be in Markdown format." },
-            filePath: { type: Type.STRING, description: "The full path of the file where the issue was found." },
-            suggestion: {
-                type: Type.OBJECT,
-                properties: {
-                    before: { type: Type.STRING, description: "The exact code snippet to be replaced." },
-                    after: { type: Type.STRING, description: "The new, improved code snippet." }
-                },
-                propertyOrdering: ["before", "after"],
-                description: "The suggested code change. Omit this field if no direct code change is applicable."
-            },
-            learnMoreUrl: { type: Type.STRING, description: "An optional URL to a resource that explains the concept further." }
-        },
-        propertyOrdering: ["category", "severity", "title", "summary", "filePath", "suggestion", "learnMoreUrl"],
-        required: ["category", "severity", "title", "summary", "filePath"]
-    }
-};
-
 const formatProjectFiles = (files: ProjectFile[]): string => {
     if (files.length === 1 && files[0].path.startsWith('snippet.')) {
         return files[0].content;
@@ -58,7 +32,7 @@ const formatProjectFiles = (files: ProjectFile[]): string => {
     ).join('\n\n');
 };
 
-const generateReviewPrompt = (files: ProjectFile[], focusAreas: string[]): string => {
+const generateStreamReviewPrompt = (files: ProjectFile[], focusAreas: string[]): string => {
   const isProject = files.length > 1 || (files.length === 1 && !files[0].path.startsWith('snippet.'));
   const reviewSubject = isProject ? 'project, which consists of multiple files' : 'code file';
   const fileHeader = isProject ? '**Project Files:**' : '**Code:**';
@@ -69,7 +43,17 @@ const generateReviewPrompt = (files: ProjectFile[], focusAreas: string[]): strin
 
   return `Please perform a holistic code review of the following ${reviewSubject}. Analyze the code for bugs, performance issues, security vulnerabilities, and adherence to best practices. For projects with multiple files, consider the interactions between them.
 ${focusPrompt}
-Provide your feedback as a JSON array that adheres to the defined schema. Each item in the array should represent a single finding in a specific file.
+Provide your feedback as a stream of individual, newline-separated JSON objects. Each JSON object must represent a single finding in a specific file. The JSON object must conform to this schema:
+{
+  "category": "string (one of: ${REVIEW_FOCUS_AREAS.join(', ')})",
+  "severity": "string (one of: 'Critical', 'High', 'Medium', 'Low', 'Info')",
+  "title": "string",
+  "summary": "string (in Markdown format)",
+  "filePath": "string",
+  "suggestion": { "before": "string", "after": "string" } | null,
+  "learnMoreUrl": "string" | null
+}
+Do not wrap the output in a JSON array. Start streaming the JSON objects immediately.
 
 ${fileHeader}
 ${formatProjectFiles(files)}
@@ -79,24 +63,50 @@ ${formatProjectFiles(files)}
 export const performCodeReview = async (
   files: ProjectFile[],
   focusAreas: string[],
-  personaInstruction: string
-): Promise<{ response: ReviewFinding[]; userPrompt: string; }> => {
+  personaInstruction: string,
+  onChunkReceived: (finding: ReviewFinding) => void,
+): Promise<{ userPrompt: string; }> => {
   try {
     const aiClient = await getAiClient();
-    const userPrompt = generateReviewPrompt(files, focusAreas);
+    const userPrompt = generateStreamReviewPrompt(files, focusAreas);
 
-    const result = await aiClient.models.generateContent({
+    const resultStream = await aiClient.models.generateContentStream({
         model: 'gemini-2.5-flash',
         contents: userPrompt,
         config: {
-            responseMimeType: "application/json",
-            responseSchema: reviewSchema,
             systemInstruction: personaInstruction,
         },
     });
 
-    const response = JSON.parse(result.text);
-    return { response, userPrompt };
+    let buffer = '';
+    for await (const chunk of resultStream) {
+        buffer += chunk.text;
+        
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep the last, possibly incomplete, line in buffer
+
+        for (const line of lines) {
+            if (line.trim()) {
+                try {
+                    const finding = JSON.parse(line) as ReviewFinding;
+                    onChunkReceived(finding);
+                } catch (e) {
+                    console.warn("Could not parse streamed JSON object:", line, e);
+                }
+            }
+        }
+    }
+
+    if (buffer.trim()) {
+        try {
+            const finding = JSON.parse(buffer) as ReviewFinding;
+            onChunkReceived(finding);
+        } catch (e) {
+            console.warn("Could not parse final buffered JSON object:", buffer, e);
+        }
+    }
+
+    return { userPrompt };
   } catch (error) {
     console.error("Error in performCodeReview:", error);
     if (error instanceof Error) throw error;
