@@ -1,6 +1,6 @@
 import { GoogleGenAI, Content, Type } from "@google/genai";
 import { REVIEW_FOCUS_AREAS } from '../constants';
-import type { ReviewFinding } from '../App';
+import type { ReviewFinding, ProjectFile } from '../App';
 
 let ai: GoogleGenAI | null = null;
 
@@ -32,6 +32,7 @@ const reviewSchema = {
             severity: { type: Type.STRING, enum: ['Critical', 'High', 'Medium', 'Low', 'Info'], description: "The severity of the issue." },
             title: { type: Type.STRING, description: "A short, descriptive title for the finding." },
             summary: { type: Type.STRING, description: "A clear and simple explanation of the issue and why it matters. This should be in Markdown format." },
+            filePath: { type: Type.STRING, description: "The full path of the file where the issue was found." },
             suggestion: {
                 type: Type.OBJECT,
                 properties: {
@@ -43,35 +44,46 @@ const reviewSchema = {
             },
             learnMoreUrl: { type: Type.STRING, description: "An optional URL to a resource that explains the concept further." }
         },
-        propertyOrdering: ["category", "severity", "title", "summary", "suggestion", "learnMoreUrl"],
-        required: ["category", "severity", "title", "summary"]
+        propertyOrdering: ["category", "severity", "title", "summary", "filePath", "suggestion", "learnMoreUrl"],
+        required: ["category", "severity", "title", "summary", "filePath"]
     }
 };
 
-const generateReviewPrompt = (code: string, language: string, focusAreas: string[]): string => {
+const formatProjectFiles = (files: ProjectFile[]): string => {
+    if (files.length === 1 && files[0].path.startsWith('snippet.')) {
+        return files[0].content;
+    }
+    return files.map(file => 
+        `--- FILE: ${file.path} ---\n${file.content}\n--- END OF FILE: ${file.path} ---`
+    ).join('\n\n');
+};
+
+const generateReviewPrompt = (files: ProjectFile[], focusAreas: string[]): string => {
+  const isProject = files.length > 1 || (files.length === 1 && !files[0].path.startsWith('snippet.'));
+  const reviewSubject = isProject ? 'project, which consists of multiple files' : 'code file';
+  const fileHeader = isProject ? '**Project Files:**' : '**Code:**';
+
   const focusPrompt = focusAreas.length > 0
     ? `Please pay special attention to these areas: ${focusAreas.join(', ')}.`
     : `Analyze all aspects of the code, including: ${REVIEW_FOCUS_AREAS.join(', ')}.`;
 
-  return `Please review the following ${language} code snippet. 
+  return `Please perform a holistic code review of the following ${reviewSubject}. Analyze the code for bugs, performance issues, security vulnerabilities, and adherence to best practices. For projects with multiple files, consider the interactions between them.
 ${focusPrompt}
-Provide your feedback as a JSON array that adheres to the defined schema. Each item in the array should represent a single finding. For each finding, provide a category, severity, a concise title, a detailed summary in Markdown, and an optional code suggestion and a "learn more" URL.
+Provide your feedback as a JSON array that adheres to the defined schema. Each item in the array should represent a single finding in a specific file.
 
-\`\`\`${language}
-${code}
-\`\`\`
+${fileHeader}
+${formatProjectFiles(files)}
 `;
 };
 
 export const performCodeReview = async (
-  code: string,
-  language: string,
+  files: ProjectFile[],
   focusAreas: string[],
   personaInstruction: string
 ): Promise<{ response: ReviewFinding[]; userPrompt: string; }> => {
   try {
     const aiClient = await getAiClient();
-    const userPrompt = generateReviewPrompt(code, language, focusAreas);
+    const userPrompt = generateReviewPrompt(files, focusAreas);
 
     const result = await aiClient.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -93,27 +105,51 @@ export const performCodeReview = async (
 };
 
 
-const generateActionPrompt = (code: string, language: string, action: 'test' | 'docs'): string => {
+const generateActionPrompt = (
+    code: string,
+    language: string,
+    projectFiles: ProjectFile[],
+    targetFilePath: string,
+    action: 'test' | 'docs'
+): string => {
     let task: string;
+    const projectContextFiles = projectFiles.filter(f => f.path !== targetFilePath);
+    const hasProjectContext = projectContextFiles.length > 0;
+    
+    const contextPrompt = hasProjectContext 
+        ? `Use the other provided project files for context if needed.\n\n**Full Project Context (for reference):**\n${formatProjectFiles(projectContextFiles)}`
+        : '';
+
     if (action === 'test') {
         const framework = (language === 'javascript' || language === 'typescript') ? 'Jest' : 'a suitable standard testing framework for the language';
-        task = `Generate a complete unit test suite for the following ${language} code using ${framework}. The tests should cover the main functionality, edge cases, and potential error conditions. The response should be a single markdown code block containing the test code.`;
+        task = `Generate a complete unit test suite for the file \`${targetFilePath}\` using ${framework}. The tests should cover the main functionality, edge cases, and potential error conditions. The response should be a single markdown code block containing the test code.`;
     } else { // docs
         const format = (language === 'javascript' || language === 'typescript') ? 'JSDoc' : 'the standard documentation format for the language (e.g., Python Docstrings)';
-        task = `Generate comprehensive documentation for the following ${language} code. Use the ${format} format. The response should be a single markdown code block containing only the documented code.`;
+        task = `Generate comprehensive documentation for the file \`${targetFilePath}\`. Use the ${format} format. The response should be a single markdown code block containing only the documented code.`;
     }
-    return `${task}\n\n\`\`\`${language}\n${code}\n\`\`\``;
+
+    return `${task}
+
+**Target File: \`${targetFilePath}\`**
+\`\`\`${language}
+${code}
+\`\`\`
+
+${contextPrompt}
+`;
 };
 
 const generateAiAction = async (
   code: string,
   language: string,
+  projectFiles: ProjectFile[],
+  targetFilePath: string,
   personaInstruction: string,
   action: 'test' | 'docs'
 ): Promise<{ response: string; userPrompt: string; }> => {
   try {
     const aiClient = await getAiClient();
-    const userPrompt = generateActionPrompt(code, language, action);
+    const userPrompt = generateActionPrompt(code, language, projectFiles, targetFilePath, action);
 
     const result = await aiClient.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -131,11 +167,11 @@ const generateAiAction = async (
   }
 };
 
-export const generateUnitTests = (code: string, language: string, personaInstruction: string) => 
-    generateAiAction(code, language, personaInstruction, 'test');
+export const generateUnitTests = (code: string, language: string, projectFiles: ProjectFile[], targetFilePath: string, personaInstruction: string) => 
+    generateAiAction(code, language, projectFiles, targetFilePath, personaInstruction, 'test');
 
-export const generateDocumentation = (code: string, language: string, personaInstruction: string) =>
-    generateAiAction(code, language, personaInstruction, 'docs');
+export const generateDocumentation = (code: string, language: string, projectFiles: ProjectFile[], targetFilePath: string, personaInstruction: string) =>
+    generateAiAction(code, language, projectFiles, targetFilePath, personaInstruction, 'docs');
 
 
 export const sendFollowUpMessage = async (

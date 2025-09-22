@@ -1,15 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { SUPPORTED_LANGUAGES } from '../constants';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { CheckIcon } from './icons/CheckIcon';
-import { SparklesIcon } from './icons/SparklesIcon';
+import { CodeBracketIcon } from './icons/CodeBracketIcon';
+import LanguageIcon from './LanguageIcon';
 
-interface FocusSelectorProps {
-  options: string[];
-  selectedOptions: string[];
-  onChange: (selected: string[]) => void;
+interface LanguageSelectorProps {
+  selectedLanguage: string;
+  onLanguageChange: (lang: string) => void;
 }
 
-const FocusSelector: React.FC<FocusSelectorProps> = ({ options, selectedOptions, onChange }) => {
+const LanguageSelector: React.FC<LanguageSelectorProps> = ({ selectedLanguage, onLanguageChange }) => {
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -22,23 +23,14 @@ const FocusSelector: React.FC<FocusSelectorProps> = ({ options, selectedOptions,
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [wrapperRef]);
-
-  const handleToggleOption = (option: string) => {
-    const newSelected = selectedOptions.includes(option)
-      ? selectedOptions.filter((o) => o !== option)
-      : [...selectedOptions, option];
-    onChange(newSelected);
-  };
   
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onChange([]);
+  const handleSelect = (langValue: string) => {
+    onLanguageChange(langValue);
+    setIsOpen(false);
   }
 
   const getButtonText = () => {
-    if (selectedOptions.length === 0) return 'General Review';
-    if (selectedOptions.length === 1) return selectedOptions[0];
-    return `${selectedOptions.length} Areas Selected`;
+    return SUPPORTED_LANGUAGES.find(l => l.value === selectedLanguage)?.label || 'Select Language';
   };
 
   return (
@@ -49,7 +41,7 @@ const FocusSelector: React.FC<FocusSelectorProps> = ({ options, selectedOptions,
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
-        <SparklesIcon className="h-4 w-4 mr-2 text-light-label-secondary dark:text-dark-label-secondary"/>
+        <CodeBracketIcon className="h-4 w-4 mr-2 text-light-label-secondary dark:text-dark-label-secondary"/>
         <span className="flex-grow text-left truncate">{getButtonText()}</span>
         <ChevronDownIcon className={`h-4 w-4 ml-2 transition-transform duration-200 text-light-label-tertiary dark:text-dark-label-tertiary ${isOpen ? 'rotate-180' : ''}`} />
       </button>
@@ -57,23 +49,23 @@ const FocusSelector: React.FC<FocusSelectorProps> = ({ options, selectedOptions,
       {isOpen && (
         <div className="absolute bottom-full mb-2 w-full sm:w-64 bg-light-bg-elevated/80 dark:bg-dark-bg-elevated/80 backdrop-blur-xl border border-light-separator dark:border-dark-separator rounded-xl shadow-xl z-10 animate-slide-up-fade">
           <div className="p-2">
-            <div className="flex justify-between items-center px-2 pt-1 pb-2">
-                <p className="text-xs font-semibold text-light-label-secondary dark:text-dark-label-secondary uppercase">Focus Review On</p>
-                {selectedOptions.length > 0 && (
-                    <button onClick={handleClear} className="text-xs font-medium text-light-accent dark:text-dark-accent hover:underline">Clear</button>
-                )}
+            <div className="px-2 pt-1 pb-2">
+                <p className="text-xs font-semibold text-light-label-secondary dark:text-dark-label-secondary uppercase">Project Language</p>
             </div>
             <ul role="listbox" className="max-h-60 overflow-auto">
-              {options.map((option) => (
+              {SUPPORTED_LANGUAGES.map((lang) => (
                 <li
-                  key={option}
-                  onClick={() => handleToggleOption(option)}
+                  key={lang.value}
+                  onClick={() => handleSelect(lang.value)}
                   className="flex items-center justify-between p-2 rounded-lg cursor-pointer hover:bg-light-fill-primary dark:hover:bg-dark-fill-primary"
                   role="option"
-                  aria-selected={selectedOptions.includes(option)}
+                  aria-selected={selectedLanguage === lang.value}
                 >
-                  <span className="font-medium text-sm text-light-label-primary dark:text-dark-label-primary">{option}</span>
-                  {selectedOptions.includes(option) && <CheckIcon className="h-5 w-5 text-light-accent dark:text-dark-accent" />}
+                    <div className="flex items-center gap-3">
+                        <LanguageIcon language={lang.value} className="h-5 w-5 text-light-label-secondary dark:text-dark-label-secondary" />
+                        <span className="font-medium text-sm text-light-label-primary dark:text-dark-label-primary">{lang.label}</span>
+                    </div>
+                  {selectedLanguage === lang.value && <CheckIcon className="h-5 w-5 text-light-accent dark:text-dark-accent" />}
                 </li>
               ))}
             </ul>
@@ -84,4 +76,4 @@ const FocusSelector: React.FC<FocusSelectorProps> = ({ options, selectedOptions,
   );
 };
 
-export default FocusSelector;
+export default LanguageSelector;

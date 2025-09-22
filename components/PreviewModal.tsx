@@ -12,6 +12,7 @@ interface PreviewModalProps {
   afterCode: string;
   language: string;
   theme: Theme;
+  filePath?: string;
 }
 
 const PreviewModal: React.FC<PreviewModalProps> = ({
@@ -21,6 +22,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   beforeCode,
   afterCode,
   theme,
+  filePath
 }) => {
   const diff = useMemo(() => {
     return Diff.diffLines(beforeCode, afterCode);
@@ -29,19 +31,22 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in p-4" style={{ animationDuration: '0.2s' }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in p-4">
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/30"
         onClick={onClose}
       ></div>
-      <div className="relative z-10 w-[95vw] max-w-4xl h-full max-h-[90vh] bg-ios-light-panel dark:bg-ios-dark-panel rounded-2xl shadow-2xl flex flex-col border border-ios-light-tertiary dark:border-ios-dark-tertiary/50 overflow-hidden">
-        <header className="flex items-center justify-between p-4 border-b border-ios-light-header dark:border-ios-dark-header flex-shrink-0">
-          <h2 className="text-lg font-semibold text-ios-light-text-primary dark:text-white">
-            Preview Changes
-          </h2>
+      <div className="relative z-10 w-[95vw] max-w-4xl h-full max-h-[90vh] bg-light-bg-elevated/80 dark:bg-dark-bg-elevated/80 backdrop-blur-xl rounded-3xl shadow-2xl flex flex-col border border-light-separator dark:border-dark-separator overflow-hidden animate-slide-up-fade">
+        <header className="flex items-center justify-between p-4 border-b border-light-separator dark:border-dark-separator flex-shrink-0">
+          <div>
+            <h2 className="text-lg font-semibold text-light-label-primary dark:text-dark-label-primary">
+              Preview Changes
+            </h2>
+            {filePath && <p className="text-xs font-mono text-light-accent dark:text-dark-accent mt-1">{filePath}</p>}
+          </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-ios-light-header dark:hover:bg-ios-dark-header text-ios-light-text-secondary dark:text-ios-dark-secondary"
+            className="p-2 rounded-full hover:bg-light-fill-primary dark:hover:bg-dark-fill-primary text-light-label-secondary dark:text-dark-label-secondary"
             aria-label="Close preview"
           >
             <XIcon className="h-5 w-5" />
@@ -86,10 +91,10 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
           </pre>
         </main>
 
-        <footer className="flex items-center justify-center sm:justify-end flex-wrap gap-4 p-4 border-t border-ios-light-header dark:border-ios-dark-header flex-shrink-0">
+        <footer className="flex items-center justify-center sm:justify-end flex-wrap gap-4 p-4 border-t border-light-separator dark:border-dark-separator flex-shrink-0">
           <button
             onClick={onClose}
-            className="bg-ios-light-header dark:bg-ios-dark-header hover:bg-ios-light-tertiary dark:hover:bg-ios-dark-tertiary text-ios-light-text-primary dark:text-white font-bold py-2 px-4 rounded-full transition-colors"
+            className="bg-light-fill-primary dark:bg-dark-fill-primary hover:bg-light-fill-secondary dark:hover:bg-dark-fill-secondary text-light-label-primary dark:text-dark-label-primary font-bold py-2 px-4 rounded-full transition-colors"
           >
             Cancel
           </button>

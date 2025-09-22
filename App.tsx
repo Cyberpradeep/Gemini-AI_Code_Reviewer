@@ -1,18 +1,24 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import CodeInput from './components/CodeInput';
-import ReviewOutput from './components/ReviewOutput';
-import HistorySidebar from './components/HistorySidebar';
-import PreviewModal from './components/PreviewModal';
-import { performCodeReview, generateUnitTests, generateDocumentation, sendFollowUpMessage } from './services/geminiService';
-import { SUPPORTED_LANGUAGES, HISTORY_STORAGE_KEY, AI_PERSONAS } from './constants';
-import { MenuIcon } from './components/icons/MenuIcon';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Content } from "@google/genai";
 
+import CodeInput from './components/CodeInput';
+import ReviewOutput from './components/ReviewOutput';
+import PreviewModal from './components/PreviewModal';
+import { performCodeReview, sendFollowUpMessage, generateUnitTests, generateDocumentation } from './services/geminiService';
+import { HISTORY_STORAGE_KEY, REVIEW_FOCUS_AREAS, AI_PERSONAS, SUPPORTED_LANGUAGES } from './constants';
+import HistorySidebar from './components/HistorySidebar';
+
+export interface ProjectFile {
+  path: string;
+  content: string;
+}
+
 export interface ReviewFinding {
-  category: 'Correctness & Bugs' | 'Best Practices & Readability' | 'Performance' | 'Security' | 'Maintainability';
+  category: string;
   severity: 'Critical' | 'High' | 'Medium' | 'Low' | 'Info';
   title: string;
   summary: string;
+  filePath: string;
   suggestion?: {
     before: string;
     after: string;
@@ -20,333 +26,372 @@ export interface ReviewFinding {
   learnMoreUrl?: string;
 }
 
-export interface ChatMessage {
+export type ChatMessage = {
   role: 'user' | 'model';
   content: string | ReviewFinding[];
-}
-export interface ReviewHistoryItem {
-  id: string;
-  code: string;
-  language: string;
-  review: string | ReviewFinding[]; // The initial review object or string
-  timestamp: number;
-  chatHistory: Content[];
-}
+  prompt?: string;
+};
 
 export type Theme = 'light' | 'dark';
-export type AiAction = 'review' | 'test' | 'docs';
+export type InputMode = 'snippet' | 'project';
 
-interface PreviewState {
-  before: string;
-  after: string;
+export interface HistoryItem {
+  id: string;
+  timestamp: number;
+  inputMode: InputMode;
+  projectFiles: ProjectFile[]; // Used for both modes; snippet is a single file array
+  conversation: ChatMessage[];
   language: string;
+  persona: string;
+  focusAreas: string[];
 }
 
 const App: React.FC = () => {
-  const [code, setCode] = useState<string>('');
-  const [language, setLanguage] = useState<string>(SUPPORTED_LANGUAGES[0].value);
-  const [activeConversation, setActiveConversation] = useState<ChatMessage[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isChatting, setIsChatting] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [reviewHistory, setReviewHistory] = useState<ReviewHistoryItem[]>([]);
-  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(window.innerWidth >= 1024);
-  const [isMounted, setIsMounted] = useState(false);
   const [theme, setTheme] = useState<Theme>('dark');
-  const [reviewFocus, setReviewFocus] = useState<string[]>([]);
-  const [persona, setPersona] = useState<string>(AI_PERSONAS[0].value);
-  const [previewingFix, setPreviewingFix] = useState<PreviewState | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Core state
+  const [inputMode, setInputMode] = useState<InputMode>('snippet');
+  const [code, setCode] = useState<string>(''); // For snippet mode
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]); // For project mode
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  
+  const [conversation, setConversation] = useState<ChatMessage[]>([]);
+  const [chatHistory, setChatHistory] = useState<Content[]>([]);
+  
+  // UI states
+  const [isLoading, setIsLoading] = useState(false);
+  const [isChatting, setIsChatting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Review configuration
+  const [language, setLanguage] = useState<string>('javascript');
+  const [focusAreas, setFocusAreas] = useState<string[]>([]);
+  const [persona, setPersona] = useState<string>('mentor');
+  
+  // Modal states
+  const [preview, setPreview] = useState<{ before: string; after: string; language: string; filePath?: string } | null>(null);
+
+  // History state
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null);
 
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') as Theme;
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
-    setTheme(initialTheme);
-
     try {
       const storedHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
       if (storedHistory) {
-        setReviewHistory(JSON.parse(storedHistory));
+        setHistory(JSON.parse(storedHistory));
       }
-    } catch (err) {
-      console.error("Failed to load or parse review history from localStorage:", err);
+    } catch (e) {
+      console.error("Failed to load history:", e);
       localStorage.removeItem(HISTORY_STORAGE_KEY);
     }
     
-    const timer = setTimeout(() => setIsMounted(true), 100);
-
-    const handleResize = () => {
-      if (window.innerWidth < 1024) {
-        setIsSidebarOpen(false);
-      } else {
-        setIsSidebarOpen(true);
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', handleResize);
-    }
-  }, []);
-  
-  useEffect(() => {
-    if (theme === 'dark') {
+    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
       document.documentElement.classList.add('dark');
+      setTheme('dark');
     } else {
       document.documentElement.classList.remove('dark');
+      setTheme('light');
     }
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+  }, []);
 
-  const handleThemeToggle = () => {
-    setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
-  };
+  const saveToHistory = useCallback((updatedConversation: ChatMessage[], files: ProjectFile[]) => {
+    if (files.length === 0) return;
+    
+    const newItem: HistoryItem = {
+      id: currentHistoryId || crypto.randomUUID(),
+      timestamp: Date.now(),
+      inputMode,
+      projectFiles: files,
+      conversation: updatedConversation,
+      language,
+      persona,
+      focusAreas,
+    };
 
-  const handleAiAction = useCallback(async (action: AiAction) => {
-    if (!code.trim()) {
-      setError('Please enter some code first.');
-      return;
+    const newHistory = [newItem, ...history.filter(item => item.id !== newItem.id)];
+    setHistory(newHistory);
+    setCurrentHistoryId(newItem.id);
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(newHistory));
+  }, [inputMode, language, persona, focusAreas, history, currentHistoryId]);
+
+  const handleReview = useCallback(async () => {
+    let filesToReview: ProjectFile[];
+
+    if (inputMode === 'snippet') {
+      if (code.trim() === '') {
+        setError("Please enter some code to review.");
+        return;
+      }
+      const extension = SUPPORTED_LANGUAGES.find(l => l.value === language)?.extensions[0] || 'txt';
+      filesToReview = [{ path: `snippet.${extension}`, content: code }];
+    } else {
+      if (projectFiles.length === 0) {
+        setError("Please import a project to review.");
+        return;
+      }
+      filesToReview = projectFiles;
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    setConversation([]);
+    setChatHistory([]);
+    
+    const personaInstruction = AI_PERSONAS.find(p => p.value === persona)?.instruction || '';
+
+    try {
+      const { response, userPrompt } = await performCodeReview(filesToReview, focusAreas, personaInstruction);
+      const newConversation: ChatMessage[] = [{ role: 'model', content: response, prompt: userPrompt }];
+      setConversation(newConversation);
+      saveToHistory(newConversation, filesToReview);
+    } catch (err: any) {
+      setError(err.message || 'An unknown error occurred.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [inputMode, code, projectFiles, language, focusAreas, persona, saveToHistory]);
+
+  const handleSendMessage = useCallback(async (message: string) => {
+    if (!message.trim()) return;
+
+    const newConversation: ChatMessage[] = [...conversation, { role: 'user', content: message }];
+    setConversation(newConversation);
+    setIsChatting(true);
+    setError(null);
+    
+    try {
+      const { response, updatedHistory } = await sendFollowUpMessage(message, chatHistory);
+      const finalConversation = [...newConversation, { role: 'model', content: response }];
+      setConversation(finalConversation);
+      setChatHistory(updatedHistory);
+      // Determine files to save from current state
+      const files = inputMode === 'project' ? projectFiles : [{ path: `snippet.${SUPPORTED_LANGUAGES.find(l => l.value === language)?.extensions[0] || 'txt'}`, content: code }];
+      saveToHistory(finalConversation, files);
+    } catch (err: any) {
+      setError(err.message || 'An unknown error occurred while sending the message.');
+      setConversation(conversation); // Revert on error
+    } finally {
+      setIsChatting(false);
+    }
+  }, [conversation, chatHistory, saveToHistory, inputMode, projectFiles, code, language]);
+  
+  const handleGenerateAction = useCallback(async (action: 'test' | 'docs') => {
+    let filesToReview: ProjectFile[];
+    let targetPath: string;
+    let targetContent: string;
+
+    if (inputMode === 'snippet') {
+        if (code.trim() === '') return;
+        const extension = SUPPORTED_LANGUAGES.find(l => l.value === language)?.extensions[0] || 'txt';
+        targetPath = `snippet.${extension}`;
+        targetContent = code;
+        filesToReview = [{ path: targetPath, content: targetContent }];
+    } else {
+        if (!activeFilePath) return;
+        const file = projectFiles.find(f => f.path === activeFilePath);
+        if (!file) return;
+        targetPath = activeFilePath;
+        targetContent = file.content;
+        filesToReview = projectFiles;
     }
 
     setIsLoading(true);
     setError(null);
-    setActiveConversation([]);
-    setSelectedHistoryId(null);
+    setConversation([]);
+    setChatHistory([]);
+
+    const personaInstruction = AI_PERSONAS.find(p => p.value === persona)?.instruction || '';
 
     try {
-        let response: string | ReviewFinding[];
-        let userPrompt: string;
-        let modelResponseContent: string;
-        
-        const personaInstruction = AI_PERSONAS.find(p => p.value === persona)?.instruction || AI_PERSONAS[0].instruction;
-
-        switch (action) {
-            case 'test':
-                ({ response, userPrompt } = await generateUnitTests(code, language, personaInstruction));
-                modelResponseContent = response;
-                break;
-            case 'docs':
-                ({ response, userPrompt } = await generateDocumentation(code, language, personaInstruction));
-                modelResponseContent = response;
-                break;
-            case 'review':
-            default:
-                ({ response, userPrompt } = await performCodeReview(code, language, reviewFocus, personaInstruction));
-                modelResponseContent = JSON.stringify(response);
-                break;
-        }
-      
-      setActiveConversation([{ role: 'model', content: response }]);
-
-      const newHistoryItem: ReviewHistoryItem = {
-        id: `review-${Date.now()}`,
-        code,
-        language,
-        review: response,
-        timestamp: Date.now(),
-        chatHistory: [
-          { role: 'user', parts: [{ text: userPrompt }] },
-          { role: 'model', parts: [{ text: modelResponseContent }] }
-        ],
-      };
-
-      const updatedReviewHistory = [newHistoryItem, ...reviewHistory];
-      setReviewHistory(updatedReviewHistory);
-      setSelectedHistoryId(newHistoryItem.id);
-      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updatedReviewHistory));
-
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        setError(`An error occurred: ${e.message}`);
+      let result;
+      if (action === 'test') {
+        result = await generateUnitTests(targetContent, language, filesToReview, targetPath, personaInstruction);
       } else {
-        setError('An unknown error occurred.');
+        result = await generateDocumentation(targetContent, language, filesToReview, targetPath, personaInstruction);
       }
+      const newConversation: ChatMessage[] = [{ role: 'model', content: result.response, prompt: result.userPrompt }];
+      setConversation(newConversation);
+      saveToHistory(newConversation, filesToReview);
+    } catch (err: any) {
+      setError(err.message || 'An unknown error occurred.');
     } finally {
       setIsLoading(false);
     }
-  }, [code, language, reviewHistory, reviewFocus, persona]);
+  }, [inputMode, activeFilePath, language, persona, code, projectFiles, saveToHistory]);
 
-  const handleSelectHistoryItem = (id: string) => {
-    const item = reviewHistory.find(item => item.id === id);
-    if (item) {
-      setCode(item.code);
-      setLanguage(item.language);
-      setSelectedHistoryId(item.id);
-      
-      // The first model response is the main review/generation. Others are chat.
-      const conversation: ChatMessage[] = item.chatHistory
-        .filter(entry => entry.role !== 'user' || !entry.parts[0].text?.startsWith('Act as a')) // Filter out initial system prompt-like user messages
-        .map((entry, index) => {
-            const content = entry.parts[0].text || '';
-            if (entry.role === 'model' && index === 1) { // First model response
-                try {
-                    // Try to parse as JSON (structured review), fallback to string
-                    return { role: 'model', content: JSON.parse(content) };
-                } catch {
-                    return { role: 'model', content: content };
-                }
+
+  const handleApplyFix = useCallback((before: string, after: string, filePath?: string) => {
+    const targetPath = filePath || (inputMode === 'project' ? activeFilePath : '');
+    
+    if (inputMode === 'project' && targetPath) {
+        setProjectFiles(prevFiles => {
+          return prevFiles.map(file => {
+            if (file.path === targetPath) {
+              return { ...file, content: file.content.replace(before, after) };
             }
-            return {
-                role: entry.role as 'user' | 'model',
-                content: content,
-            };
+            return file;
+          });
         });
-
-      setActiveConversation(conversation);
-      setError(null);
-      setIsLoading(false);
-      if (window.innerWidth < 1024) {
-        setIsSidebarOpen(false);
-      }
+    } else if (inputMode === 'snippet') {
+        setCode(prevCode => prevCode.replace(before, after));
     }
-  };
+    setPreview(null);
+  }, [activeFilePath, inputMode]);
 
-  const handleNewReview = () => {
-    setCode('');
-    setActiveConversation([]);
+  const handlePreviewFix = (before: string, after: string, lang: string, filePath?: string) => {
+    setPreview({ before, after, language: lang, filePath });
+  };
+  
+  const handleProjectImport = (files: ProjectFile[]) => {
+    setProjectFiles(files);
+    setActiveFilePath(files[0]?.path || null);
+    setInputMode('project');
+    setCode(''); // Clear snippet code
+    
+    const extensionCounts = files.reduce((acc, file) => {
+      const ext = file.path.split('.').pop() || '';
+      if (ext) {
+        acc[ext] = (acc[ext] || 0) + 1;
+      }
+      return acc;
+    }, {} as Record<string, number>);
+
+    const mostCommonExt = Object.keys(extensionCounts).sort((a,b) => extensionCounts[b] - extensionCounts[a])[0];
+    const detectedLang = SUPPORTED_LANGUAGES.find(lang => lang.extensions.includes(mostCommonExt));
+    if (detectedLang) {
+      setLanguage(detectedLang.value);
+    }
+
+    setConversation([]);
+    setChatHistory([]);
+    setCurrentHistoryId(null);
     setError(null);
-    setSelectedHistoryId(null);
-    setLanguage(SUPPORTED_LANGUAGES[0].value);
-     if (window.innerWidth < 1024) {
-        setIsSidebarOpen(false);
-      }
   };
   
-  const handleSendMessage = async (message: string) => {
-    const currentItem = reviewHistory.find(item => item.id === selectedHistoryId);
-    if (!message.trim() || !currentItem) return;
+  const handleFileContentChange = (path: string, newContent: string) => {
+    setProjectFiles(files => files.map(f => f.path === path ? { ...f, content: newContent } : f));
+  };
+  
+  const startNewReview = () => {
+    setConversation([]);
+    setChatHistory([]);
+    setProjectFiles([]);
+    setActiveFilePath(null);
+    setCurrentHistoryId(null);
+    setError(null);
+    setInputMode('snippet');
+    setCode('');
+  };
+  
+  const loadFromHistory = (item: HistoryItem) => {
+    setInputMode(item.inputMode);
+    setProjectFiles(item.projectFiles);
+    setConversation(item.conversation);
+    setLanguage(item.language);
+    setPersona(item.persona);
+    setFocusAreas(item.focusAreas);
+    setCurrentHistoryId(item.id);
+    setError(null);
+    
+    if (item.inputMode === 'project') {
+        setActiveFilePath(item.projectFiles[0]?.path || null);
+        setCode('');
+    } else {
+        setActiveFilePath(null);
+        setCode(item.projectFiles[0]?.content || '');
+    }
 
-    setIsChatting(true);
+    setIsSidebarOpen(false);
+  };
+  
+  const deleteFromHistory = (id: string) => {
+    const newHistory = history.filter(item => item.id !== id);
+    setHistory(newHistory);
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(newHistory));
+    if (currentHistoryId === id) {
+      startNewReview();
+    }
+  };
 
-    const userMessage: ChatMessage = { role: 'user', content: message };
-    setActiveConversation(prev => [...prev, userMessage]);
 
-    try {
-      const { response, updatedHistory } = await sendFollowUpMessage(
-        message,
-        currentItem.chatHistory
-      );
-
-      const modelMessage: ChatMessage = { role: 'model', content: response };
-      setActiveConversation(prev => [...prev, modelMessage]);
-
-      const updatedReviewHistory = reviewHistory.map(item =>
-        item.id === selectedHistoryId ? { ...item, chatHistory: updatedHistory } : item
-      );
-      setReviewHistory(updatedReviewHistory);
-      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updatedReviewHistory));
-
-    } catch (e: unknown) {
-      const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-      setError(errorMessage);
-      setActiveConversation(prev => prev.slice(0, -1)); // Remove user message on error
-    } finally {
-      setIsChatting(false);
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.theme = newTheme;
+    if (newTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
     }
   };
   
-  const handleApplyFix = (before: string, after: string) => {
-    setCode(currentCode => currentCode.replace(before, after));
-  };
-  
-  const handlePreviewFix = (before: string, after: string, language: string) => {
-    setPreviewingFix({ before, after, language });
-  };
-
-  const handleClosePreview = () => {
-    setPreviewingFix(null);
-  };
-
-  const handleApplyFromPreview = () => {
-    if (previewingFix) {
-      handleApplyFix(previewingFix.before, previewingFix.after);
-    }
-    handleClosePreview();
-  };
-
-  const toggleSidebar = () => {
-    setIsSidebarOpen(prev => !prev);
-  }
-  
-  const selectedItem = reviewHistory.find(item => item.id === selectedHistoryId);
-  const currentCode = selectedItem ? selectedItem.code : code;
-  const currentLanguage = selectedItem ? selectedItem.language : language;
+  const activeFileInProject = useMemo(() => projectFiles.find(f => f.path === activeFilePath), [projectFiles, activeFilePath]);
 
   return (
-    <>
-      <div className="min-h-screen bg-ios-light-bg dark:bg-black text-ios-light-text-primary dark:text-gray-200 flex h-screen font-sans overflow-hidden">
-        <HistorySidebar
-          history={reviewHistory}
-          languages={SUPPORTED_LANGUAGES}
-          selectedId={selectedHistoryId}
-          onSelectItem={handleSelectHistoryItem}
-          onNewReview={handleNewReview}
-          isOpen={isSidebarOpen}
-          onToggle={toggleSidebar}
-          theme={theme}
-          onThemeToggle={handleThemeToggle}
-        />
-        <div className={`flex-1 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out lg:transform-none ${isSidebarOpen ? 'lg:translate-x-0' : 'lg:translate-x-0'} ${isSidebarOpen && window.innerWidth < 1024 ? 'translate-x-72 scale-90 rounded-2xl overflow-hidden' : 'translate-x-0'}`}>
-          <main className={`flex-grow grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 p-4 md:p-6 relative transition-opacity duration-500 ${isMounted ? 'opacity-100' : 'opacity-0'} bg-ios-light-bg dark:bg-black overflow-hidden`}>
-            {!isSidebarOpen && (
-              <button
-                onClick={toggleSidebar}
-                className="absolute top-4 left-4 z-20 p-2 bg-ios-light-panel/80 dark:bg-ios-dark-panel/50 backdrop-blur-md rounded-full text-ios-light-text-secondary dark:text-gray-300 hover:text-ios-light-text-primary dark:hover:text-white hover:bg-ios-light-header dark:hover:bg-ios-dark-panel transition-all lg:hidden"
-                aria-label="Open history sidebar"
-              >
-                <MenuIcon className="h-6 w-6" />
-              </button>
-            )}
-            <div className="lg:col-span-1 min-h-0">
-              <CodeInput
-                code={code}
-                setCode={setCode}
-                language={language}
-                setLanguage={setLanguage}
-                languages={SUPPORTED_LANGUAGES}
-                onAiAction={handleAiAction}
-                isLoading={isLoading}
-                reviewFocus={reviewFocus}
-                setReviewFocus={setReviewFocus}
-                persona={persona}
-                setPersona={setPersona}
-              />
-            </div>
-            <div className="lg:col-span-1 min-h-0">
-              <ReviewOutput 
-                conversation={activeConversation}
-                isLoading={isLoading} 
-                isChatting={isChatting}
-                error={error} 
-                theme={theme}
-                code={currentCode}
-                language={currentLanguage}
-                onSendMessage={handleSendMessage}
-                onApplyFix={handleApplyFix}
-                onPreviewFix={handlePreviewFix}
-              />
-            </div>
-          </main>
-          <footer className={`text-center p-3 text-ios-light-text-secondary dark:text-ios-dark-secondary text-xs border-t border-ios-light-header dark:border-ios-dark-panel flex-shrink-0 transition-opacity duration-500 ${isMounted ? 'opacity-100' : 'opacity-0'} bg-ios-light-bg dark:bg-black`}>
-            <p>Powered by Google Gemini</p>
-          </footer>
-        </div>
+    <div className="flex h-screen bg-light-bg-base dark:bg-dark-bg-base font-sans transition-colors duration-300">
+       <HistorySidebar 
+         isOpen={isSidebarOpen}
+         onClose={() => setIsSidebarOpen(false)}
+         history={history}
+         onLoad={loadFromHistory}
+         onDelete={deleteFromHistory}
+         onNew={startNewReview}
+         theme={theme}
+         onToggleTheme={toggleTheme}
+       />
+      <div className="flex-1 flex flex-col min-w-0">
+        <main className="flex-1 p-3 lg:p-4 grid grid-cols-1 lg:grid-cols-2 gap-4 overflow-hidden">
+          <CodeInput
+            inputMode={inputMode}
+            code={code}
+            onCodeChange={setCode}
+            projectFiles={projectFiles}
+            activeFile={activeFileInProject}
+            onFileSelect={setActiveFilePath}
+            onFileContentChange={handleFileContentChange}
+            language={language}
+            onLanguageChange={setLanguage}
+            focusAreas={focusAreas}
+            onFocusAreaChange={setFocusAreas}
+            persona={persona}
+            onPersonaChange={setPersona}
+            onReview={handleReview}
+            onGenerate={handleGenerateAction}
+            isLoading={isLoading}
+            onProjectImport={handleProjectImport}
+            onMenuClick={() => setIsSidebarOpen(true)}
+            onNewReview={startNewReview}
+          />
+
+          <ReviewOutput
+            conversation={conversation}
+            isLoading={isLoading}
+            isChatting={isChatting}
+            error={error}
+            theme={theme}
+            language={language}
+            onSendMessage={handleSendMessage}
+            onApplyFix={handleApplyFix}
+            onPreviewFix={handlePreviewFix}
+            projectFiles={projectFiles}
+          />
+        </main>
       </div>
-      {previewingFix && (
-        <PreviewModal
-          isOpen={!!previewingFix}
-          onClose={handleClosePreview}
-          onApply={handleApplyFromPreview}
-          beforeCode={previewingFix.before}
-          afterCode={previewingFix.after}
-          language={previewingFix.language}
-          theme={theme}
-        />
-      )}
-    </>
+
+      <PreviewModal
+        isOpen={!!preview}
+        onClose={() => setPreview(null)}
+        onApply={() => preview && handleApplyFix(preview.before, preview.after, preview.filePath)}
+        beforeCode={preview?.before || ''}
+        afterCode={preview?.after || ''}
+        language={preview?.language || language}
+        theme={theme}
+        filePath={preview?.filePath}
+      />
+    </div>
   );
 };
 

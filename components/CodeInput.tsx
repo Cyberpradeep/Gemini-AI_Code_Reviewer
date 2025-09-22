@@ -1,171 +1,262 @@
-import React, { useRef } from 'react';
-import { UploadIcon } from './icons/UploadIcon';
+import React, { useState } from 'react';
+import type { ProjectFile, InputMode } from '../App';
+import { SUPPORTED_LANGUAGES, REVIEW_FOCUS_AREAS } from '../constants';
+import LanguageSelector from './LanguageSelector';
 import FocusSelector from './FocusSelector';
 import PersonaSelector from './PersonaSelector';
-import { REVIEW_FOCUS_AREAS } from '../constants';
-import type { AiAction } from '../App';
-
-interface Language {
-  value: string;
-  label: string;
-}
+import ProjectImportModal from './ProjectImportModal';
+import FileExplorer from './FileExplorer';
+import { UploadIcon } from './icons/UploadIcon';
+import Spinner from './Spinner';
+import { MenuIcon } from './icons/MenuIcon';
+import { CodeIcon } from './icons/CodeIcon';
+import LanguageIcon from './LanguageIcon';
+import { PlusIcon } from './icons/PlusIcon';
 
 interface CodeInputProps {
+  inputMode: InputMode;
   code: string;
-  setCode: (code: string) => void;
+  onCodeChange: (code: string) => void;
+  projectFiles: ProjectFile[];
+  activeFile: ProjectFile | undefined;
+  onFileSelect: (path: string) => void;
+  onFileContentChange: (path: string, newContent: string) => void;
   language: string;
-  setLanguage: (language: string) => void;
-  languages: Language[];
-  onAiAction: (action: AiAction) => void;
-  isLoading: boolean;
-  reviewFocus: string[];
-  setReviewFocus: (focus: string[]) => void;
+  onLanguageChange: (lang: string) => void;
+  focusAreas: string[];
+  onFocusAreaChange: (areas: string[]) => void;
   persona: string;
-  setPersona: (persona: string) => void;
+  onPersonaChange: (persona: string) => void;
+  onReview: () => void;
+  onGenerate: (action: 'test' | 'docs') => void;
+  isLoading: boolean;
+  onProjectImport: (files: ProjectFile[]) => void;
+  onMenuClick: () => void;
+  onNewReview: () => void;
 }
 
-const languageMap: Record<string, string> = {
-  js: 'javascript',
-  jsx: 'javascript',
-  ts: 'typescript',
-  tsx: 'typescript',
-  py: 'python',
-  java: 'java',
-  cs: 'csharp',
-  go: 'go',
-  rs: 'rust',
-  cpp: 'cpp',
-  h: 'cpp',
-  hpp: 'cpp',
-  rb: 'ruby',
-  php: 'php',
-  html: 'html',
-  css: 'css',
-  sql: 'sql',
-};
+const PlayIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+);
+const TestTubeIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M14.5 2H9.5a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h5a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z" />
+        <path d="M8 2v2" /><path d="M16 2v2" /><path d="M12 11h.01" />
+    </svg>
+);
+const DocsIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
+    </svg>
+);
 
 const CodeInput: React.FC<CodeInputProps> = ({
+  inputMode,
   code,
-  setCode,
+  onCodeChange,
+  projectFiles,
+  activeFile,
+  onFileSelect,
+  onFileContentChange,
   language,
-  setLanguage,
-  languages,
-  onAiAction,
-  isLoading,
-  reviewFocus,
-  setReviewFocus,
+  onLanguageChange,
+  focusAreas,
+  onFocusAreaChange,
   persona,
-  setPersona,
+  onPersonaChange,
+  onReview,
+  onGenerate,
+  isLoading,
+  onProjectImport,
+  onMenuClick,
+  onNewReview,
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      setCode(text);
-
-      const extension = file.name.split('.').pop()?.toLowerCase();
-      if (extension && languageMap[extension]) {
-        const langValue = languageMap[extension];
-        if (languages.some(l => l.value === langValue)) {
-            setLanguage(langValue);
-        }
-      }
-    };
-    reader.onerror = (e) => {
-        console.error("Failed to read file:", e);
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (inputMode === 'project' && activeFile) {
+      onFileContentChange(activeFile.path, e.target.value);
+    } else if (inputMode === 'snippet') {
+      onCodeChange(e.target.value);
     }
-    reader.readAsText(file);
-    event.target.value = '';
   };
+  
+  const handleProjectImportSuccess = (files: ProjectFile[]) => {
+    onProjectImport(files);
+    setIsImportModalOpen(false);
+  }
 
-  const handleUploadClick = () => {
-    fileInputRef.current?.click();
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        onNewReview(); // Resets to snippet mode
+        onCodeChange(content);
+        // Auto-detect language
+        const extension = file.name.split('.').pop() || '';
+        const detectedLang = SUPPORTED_LANGUAGES.find(lang => lang.extensions.includes(extension));
+        if (detectedLang) onLanguageChange(detectedLang.value);
+      };
+      reader.readAsText(file);
+    }
+    event.target.value = ''; // Reset file input
   };
+  
+  const canRunActions = inputMode === 'snippet' ? code.trim().length > 0 : projectFiles.length > 0;
+  const canRunFileActions = inputMode === 'snippet' ? code.trim().length > 0 : !!activeFile;
 
   return (
-    <div className={`bg-ios-light-panel dark:bg-ios-dark-panel rounded-2xl shadow-lg flex flex-col h-full border border-ios-light-tertiary dark:border-ios-dark-tertiary/50 transition-opacity duration-300 ${isLoading ? 'opacity-60 pointer-events-none' : ''}`}>
-      <div className="p-4 border-b border-ios-light-header dark:border-ios-dark-header flex items-center justify-between flex-wrap gap-2 sm:gap-4">
-        <h2 className="text-lg font-semibold text-ios-light-text-primary dark:text-white">Your Code</h2>
-        <div className="flex items-center gap-2 flex-grow justify-end">
-           <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            className="hidden"
-            accept=".js,.jsx,.ts,.tsx,.py,.java,.cs,.go,.rs,.cpp,.h,.hpp,.rb,.php,.html,.css,.sql"
-          />
-          <button
-            onClick={handleUploadClick}
-            className="flex items-center gap-2 bg-ios-light-header dark:bg-ios-dark-header hover:bg-ios-light-tertiary dark:hover:bg-ios-dark-tertiary text-ios-light-text-primary dark:text-white font-medium py-2 px-3 rounded-full transition-colors duration-200 text-sm"
-            aria-label="Upload a code file"
-          >
-            <UploadIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">Upload</span>
-          </button>
-          <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            className="bg-ios-light-header dark:bg-ios-dark-header border-none text-ios-light-text-primary dark:text-white text-sm rounded-full focus:ring-2 focus:ring-cyan-500 block p-2 appearance-none pr-8"
-            aria-label="Select programming language"
-          >
-            {languages.map((lang) => (
-              <option key={lang.value} value={lang.value} className="bg-ios-light-panel dark:bg-ios-dark-header">
-                {lang.label}
-              </option>
-            ))}
-          </select>
+    <>
+      <div className="bg-light-bg-elevated/80 dark:bg-dark-bg-elevated/80 backdrop-blur-xl rounded-2xl shadow-lg flex flex-col border border-light-separator dark:border-dark-separator overflow-hidden">
+        <header className="p-3 border-b border-light-separator dark:border-dark-separator flex items-center justify-between flex-wrap gap-2 h-16">
+            <div className="flex items-center gap-2">
+                <button onClick={onMenuClick} className="lg:hidden p-2 -ml-1 rounded-full text-light-label-secondary dark:text-dark-label-secondary hover:bg-light-fill-primary dark:hover:bg-dark-fill-primary">
+                    <MenuIcon className="h-5 w-5" />
+                </button>
+                <div className="flex items-center gap-3">
+                    <div className="bg-light-accent/10 dark:bg-dark-accent/20 p-2 rounded-lg flex-shrink-0">
+                        <CodeIcon className="h-6 w-6 text-light-accent dark:text-dark-accent" />
+                    </div>
+                    <div>
+                        <h1 className="text-base font-semibold text-light-label-primary dark:text-dark-label-primary whitespace-nowrap">
+                            AI Code Reviewer
+                        </h1>
+                        <p className="text-sm text-light-label-secondary dark:text-dark-label-secondary -mt-0.5">
+                          {inputMode === 'project' ? 'Project Input' : 'Code Snippet'}
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div className="flex items-center gap-2">
+                {inputMode === 'snippet' && (
+                    <>
+                        <input type="file" id="file-upload" className="hidden" onChange={handleFileUpload} />
+                        <label htmlFor="file-upload" className="flex items-center gap-2 bg-light-fill-primary dark:bg-dark-fill-primary hover:bg-light-fill-secondary dark:hover:bg-dark-fill-secondary text-light-label-secondary dark:text-dark-label-secondary font-medium py-1.5 px-3 rounded-full transition-colors text-xs cursor-pointer">
+                            <UploadIcon className="h-4 w-4" />
+                            Upload
+                        </label>
+                    </>
+                )}
+                <button
+                onClick={() => setIsImportModalOpen(true)}
+                className="flex items-center gap-2 bg-light-fill-primary dark:bg-dark-fill-primary hover:bg-light-fill-secondary dark:hover:bg-dark-fill-secondary text-light-label-secondary dark:text-dark-label-secondary font-medium py-1.5 px-3 rounded-full transition-colors text-xs"
+                >
+                <PlusIcon className="h-4 w-4" />
+                Import
+                </button>
+            </div>
+        </header>
+
+        <div className="flex-1 flex overflow-hidden">
+          {inputMode === 'project' ? (
+             <>
+                <div className="w-48 xl:w-56 bg-light-bg-elevated/60 dark:bg-dark-bg-elevated/60 border-r border-light-separator dark:border-dark-separator flex-shrink-0 overflow-y-auto">
+                    {projectFiles.length > 0 ? (
+                        <FileExplorer files={projectFiles} activeFile={activeFile?.path || null} onSelectFile={onFileSelect} />
+                    ) : (
+                        <div className="p-4 text-center text-sm text-light-label-secondary dark:text-dark-label-secondary h-full flex flex-col items-center justify-center">
+                            <CodeIcon className="h-10 w-10 mb-2" />
+                            <p>Import a project to get started.</p>
+                        </div>
+                    )}
+                </div>
+                <div className="flex-1 flex flex-col">
+                    {activeFile ? (
+                    <>
+                        <div className="flex-shrink-0 p-2.5 border-b border-light-separator dark:border-dark-separator flex items-center gap-2">
+                        <LanguageIcon language={language} className="h-4 w-4" />
+                        <span className="font-mono text-sm text-light-label-secondary dark:text-dark-label-secondary">{activeFile.path}</span>
+                        </div>
+                        <div className="flex-1 relative">
+                        <textarea
+                            value={activeFile.content}
+                            onChange={handleTextChange}
+                            className="w-full h-full p-4 bg-transparent resize-none focus:outline-none font-mono text-sm leading-6 text-light-label-secondary dark:text-dark-label-secondary absolute inset-0"
+                            placeholder="File content will appear here..."
+                            spellCheck="false"
+                        />
+                        </div>
+                    </>
+                    ) : (
+                    <div className="flex-1 flex items-center justify-center text-center text-light-label-secondary dark:text-dark-label-secondary">
+                        <p>Select a file to view its content.</p>
+                    </div>
+                    )}
+                </div>
+            </>
+          ) : (
+            <textarea
+                value={code}
+                onChange={handleTextChange}
+                className="w-full h-full p-4 bg-transparent resize-none focus:outline-none font-mono text-sm leading-6 text-light-label-secondary dark:text-dark-label-secondary"
+                placeholder="Paste your code here..."
+                spellCheck="false"
+            />
+          )}
         </div>
+
+        <footer className="p-3 border-t border-light-separator dark:border-dark-separator flex flex-col sm:flex-row items-center justify-between gap-3 flex-wrap">
+          <div className="flex gap-2 flex-wrap justify-center">
+            <LanguageSelector
+                selectedLanguage={language}
+                onLanguageChange={onLanguageChange}
+            />
+             <FocusSelector
+              options={REVIEW_FOCUS_AREAS}
+              selectedOptions={focusAreas}
+              onChange={onFocusAreaChange}
+            />
+            <PersonaSelector selectedPersona={persona} onPersonaChange={onPersonaChange}/>
+          </div>
+          
+           <div className="flex gap-2">
+                <button
+                    onClick={() => onGenerate('test')}
+                    disabled={isLoading || !canRunFileActions}
+                    className="p-2.5 bg-light-fill-primary dark:bg-dark-fill-primary hover:bg-light-fill-secondary dark:hover:bg-dark-fill-secondary text-light-label-primary dark:text-dark-label-primary rounded-full transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Generate Unit Tests"
+                >
+                    <TestTubeIcon className="h-5 w-5" />
+                </button>
+                 <button
+                    onClick={() => onGenerate('docs')}
+                    disabled={isLoading || !canRunFileActions}
+                    className="p-2.5 bg-light-fill-primary dark:bg-dark-fill-primary hover:bg-light-fill-secondary dark:hover:bg-dark-fill-secondary text-light-label-primary dark:text-dark-label-primary rounded-full transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Generate Documentation"
+                >
+                    <DocsIcon className="h-5 w-5" />
+                </button>
+              <button
+                onClick={onReview}
+                disabled={isLoading || !canRunActions}
+                className="flex-1 sm:flex-auto flex items-center justify-center gap-2 bg-light-accent dark:bg-dark-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-wait text-white font-bold py-2.5 px-5 rounded-full transition-all duration-200"
+              >
+                {isLoading ? (
+                  <>
+                    <Spinner className="h-5 w-5" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <PlayIcon className="h-5 w-5 -ml-1" />
+                    Run Review
+                  </>
+                )}
+              </button>
+          </div>
+        </footer>
       </div>
-      <div className="flex-grow p-1">
-        <textarea
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="Paste your code here or upload a file..."
-          className="w-full h-full bg-transparent text-ios-light-text-secondary dark:text-gray-300 font-mono resize-none focus:outline-none p-4 text-sm leading-relaxed min-h-[300px] sm:min-h-[400px]"
-        />
-      </div>
-      <div className="p-4 border-t border-ios-light-header dark:border-ios-dark-header flex flex-col sm:flex-row items-center gap-4 flex-wrap">
-        <FocusSelector 
-          options={REVIEW_FOCUS_AREAS}
-          selectedOptions={reviewFocus}
-          onChange={setReviewFocus}
-        />
-        <PersonaSelector
-          selectedPersona={persona}
-          onPersonaChange={setPersona}
-        />
-        <div className="w-full flex items-center gap-2">
-            <button
-              onClick={() => onAiAction('review')}
-              disabled={isLoading || !code.trim()}
-              className="flex-1 bg-cyan-600 hover:bg-cyan-700 disabled:bg-ios-light-header dark:disabled:bg-ios-dark-header disabled:text-ios-light-text-secondary dark:disabled:text-ios-dark-secondary disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-full transition-colors duration-200 flex items-center justify-center text-base"
-            >
-              {isLoading ? 'Analyzing...' : 'Review Code'}
-            </button>
-            <button
-              onClick={() => onAiAction('test')}
-              disabled={isLoading || !code.trim()}
-              className="px-4 py-3 bg-ios-light-header dark:bg-ios-dark-header hover:bg-ios-light-tertiary dark:hover:bg-ios-dark-tertiary text-ios-light-text-primary dark:text-white font-medium rounded-full transition-colors duration-200 disabled:opacity-50"
-              title="Generate Unit Tests"
-            >
-              Tests
-            </button>
-             <button
-              onClick={() => onAiAction('docs')}
-              disabled={isLoading || !code.trim()}
-              className="px-4 py-3 bg-ios-light-header dark:bg-ios-dark-header hover:bg-ios-light-tertiary dark:hover:bg-ios-dark-tertiary text-ios-light-text-primary dark:text-white font-medium rounded-full transition-colors duration-200 disabled:opacity-50"
-              title="Generate Documentation"
-            >
-              Docs
-            </button>
-        </div>
-      </div>
-    </div>
+      <ProjectImportModal 
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onProjectImport={handleProjectImportSuccess}
+      />
+    </>
   );
 };
 

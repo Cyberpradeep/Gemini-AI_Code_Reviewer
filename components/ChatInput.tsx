@@ -34,24 +34,24 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isSending }) => {
     };
 
     return (
-        <div className="p-4 border-t border-ios-light-header dark:border-ios-dark-header bg-ios-light-panel/80 dark:bg-ios-dark-panel/80 backdrop-blur-md">
-            <form onSubmit={handleSubmit} className="flex items-center gap-4">
+        <div className="p-3 border-t border-light-separator dark:border-dark-separator">
+            <form onSubmit={handleSubmit} className="flex items-end gap-2 bg-light-fill-primary dark:bg-dark-fill-primary p-1.5 rounded-xl">
                 <textarea
                     ref={textareaRef}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Ask a follow-up question..."
-                    className="w-full bg-ios-light-header dark:bg-ios-dark-header text-ios-light-text-secondary dark:text-gray-300 font-sans resize-none focus:outline-none focus:ring-2 focus:ring-cyan-500 p-3 text-base rounded-2xl"
+                    placeholder="Ask a follow-up..."
+                    className="flex-1 bg-transparent text-light-label-primary dark:text-dark-label-primary font-sans resize-none focus:outline-none p-2 text-sm"
                     rows={1}
                 />
                 <button
                     type="submit"
                     disabled={isSending || !message.trim()}
-                    className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-ios-light-header dark:disabled:bg-ios-dark-header disabled:cursor-not-allowed text-white p-3 rounded-full transition-colors duration-200 flex-shrink-0"
+                    className="bg-light-accent dark:bg-dark-accent hover:opacity-90 disabled:bg-light-fill-secondary dark:disabled:bg-dark-fill-secondary disabled:cursor-not-allowed text-white p-2 rounded-full transition-all duration-200 flex-shrink-0"
                     aria-label="Send message"
                 >
-                    <SendIcon className="h-6 w-6" />
+                    <SendIcon className="h-5 w-5" />
                 </button>
             </form>
         </div>

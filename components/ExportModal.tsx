@@ -6,7 +6,7 @@ import remarkGfm from 'https://esm.sh/remark-gfm@4';
 import { Prism as SyntaxHighlighter } from 'https://esm.sh/react-syntax-highlighter@15.5.0';
 import { vscDarkPlus, vs } from 'https://esm.sh/react-syntax-highlighter@15.5.0/dist/esm/styles/prism';
 
-import type { Theme, ChatMessage, ReviewFinding } from '../App';
+import type { Theme, ChatMessage, ReviewFinding, ProjectFile } from '../App';
 import { stripMarkdown } from '../utils/markdownStripper';
 import { XIcon } from './icons/XIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
@@ -23,7 +23,7 @@ interface ExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   conversation: ChatMessage[];
-  code: string;
+  projectFiles: ProjectFile[];
   language: string;
   theme: Theme;
 }
@@ -32,7 +32,7 @@ const ExportModal: React.FC<ExportModalProps> = ({
   isOpen,
   onClose,
   conversation,
-  code,
+  projectFiles,
   language,
   theme,
 }) => {
@@ -46,8 +46,11 @@ const ExportModal: React.FC<ExportModalProps> = ({
   const generateMarkdownForFinding = (finding: ReviewFinding): string => {
     let md = `### ${finding.title}\n\n`;
     md += `**Severity:** ${finding.severity}  \n`;
-    md += `**Category:** ${finding.category}\n\n`;
-    md += `${finding.summary}\n\n`;
+    md += `**Category:** ${finding.category}\n`;
+    if (finding.filePath) {
+      md += `**File:** \`${finding.filePath}\`\n`;
+    }
+    md += `\n${finding.summary}\n\n`;
     if (finding.suggestion) {
         md += `**Suggestion:**\n`;
         md += `*Before:*\n\`\`\`${language}\n${finding.suggestion.before}\n\`\`\`\n`;
@@ -60,13 +63,17 @@ const ExportModal: React.FC<ExportModalProps> = ({
   }
 
   const generateFileContent = (targetFormat: ExportFormat): string => {
-    let header = `# Code Review\n\n**Language:** ${language}\n\n**Exported on:** ${new Date().toLocaleString()}\n\n`;
+    let header = `# Code Review\n\n**Primary Language:** ${language}\n\n**Exported on:** ${new Date().toLocaleString()}\n\n`;
     let fileContent = '';
     const separator = '\n\n---\n\n';
 
     if (includeCode) {
-      const codeBlockFence = '```';
-      fileContent += `## Original Code Snippet\n\n${codeBlockFence}${language}\n${code}\n${codeBlockFence}\n`;
+      fileContent += `## Original Project Files\n\n`;
+      projectFiles.forEach(file => {
+        const lang = file.path.split('.').pop() || 'plaintext';
+        fileContent += `### \`${file.path}\`\n\n`;
+        fileContent += `\`\`\`${lang}\n${file.content}\n\`\`\`\n\n`;
+      });
     }
 
     const chatContent = conversation.map(msg => {
@@ -176,7 +183,7 @@ const ExportModal: React.FC<ExportModalProps> = ({
             title: "Code Review",
             language,
             exportedAt: new Date().toISOString(),
-            code: includeCode ? code : undefined,
+            projectFiles: includeCode ? projectFiles : undefined,
             conversation,
         };
         downloadFile(JSON.stringify(jsonContent, null, 2), `${fileBaseName}.json`, 'application/json');
@@ -204,7 +211,7 @@ const ExportModal: React.FC<ExportModalProps> = ({
               <p><strong>Language:</strong> ${language}</p>
               <p><strong>Exported on:</strong> ${new Date().toLocaleString()}</p>
               <hr>
-              ${includeCode ? `<h2>Original Code Snippet</h2><pre><code>${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre><hr>` : ''}
+              ${includeCode ? `<h2>Original Project Files</h2>${projectFiles.map(f => `<h3>${f.path}</h3><pre><code>${f.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>`).join('')}<hr>` : ''}
               <h2>Conversation</h2>
               ${conversation.map(msg => `
                 <div class="message ${msg.role}">
@@ -225,7 +232,7 @@ const ExportModal: React.FC<ExportModalProps> = ({
   const FormatButton = ({ value, label, icon: Icon }) => (
     <button
         onClick={() => setFormat(value)}
-        className={`flex-1 p-3 rounded-lg text-sm font-semibold transition-colors flex flex-col items-center justify-center gap-2 border-2 ${format === value ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-ios-light-header dark:bg-ios-dark-header hover:bg-ios-light-tertiary dark:hover:bg-ios-dark-tertiary border-transparent'}`}
+        className={`flex-1 p-3 rounded-lg text-sm font-semibold transition-colors flex flex-col items-center justify-center gap-2 border-2 ${format === value ? 'bg-light-accent dark:bg-dark-accent text-white border-light-accent dark:border-dark-accent' : 'bg-light-fill-primary dark:bg-dark-fill-primary hover:bg-light-fill-secondary dark:hover:bg-dark-fill-secondary border-transparent'}`}
     >
         <Icon className="h-6 w-6" />
         {label}
@@ -234,19 +241,19 @@ const ExportModal: React.FC<ExportModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in p-4" style={{ animationDuration: '0.2s' }}>
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose}></div>
-        <div className="relative z-10 w-full max-w-lg bg-ios-light-panel dark:bg-ios-dark-panel rounded-2xl shadow-2xl flex flex-col border border-ios-light-tertiary dark:border-ios-dark-tertiary/50 overflow-hidden">
-          <header className="flex items-center justify-between p-4 border-b border-ios-light-header dark:border-ios-dark-header flex-shrink-0">
-            <h2 className="text-lg font-semibold text-ios-light-text-primary dark:text-white">Export Conversation</h2>
-            <button onClick={onClose} className="p-2 rounded-full hover:bg-ios-light-header dark:hover:bg-ios-dark-header text-ios-light-text-secondary dark:text-ios-dark-secondary" aria-label="Close export options">
+      <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in p-4">
+        <div className="absolute inset-0 bg-black/30" onClick={onClose}></div>
+        <div className="relative z-10 w-full max-w-lg bg-light-bg-elevated/80 dark:bg-dark-bg-elevated/80 backdrop-blur-xl rounded-3xl shadow-2xl flex flex-col border border-light-separator dark:border-dark-separator overflow-hidden animate-slide-up-fade">
+          <header className="flex items-center justify-between p-4 border-b border-light-separator dark:border-dark-separator flex-shrink-0">
+            <h2 className="text-lg font-semibold text-light-label-primary dark:text-dark-label-primary">Export Conversation</h2>
+            <button onClick={onClose} className="p-2 rounded-full hover:bg-light-fill-primary dark:hover:bg-dark-fill-primary text-light-label-secondary dark:text-dark-label-secondary" aria-label="Close export options">
               <XIcon className="h-5 w-5" />
             </button>
           </header>
 
           <main className="p-6 space-y-6">
             <div>
-                <label className="block text-sm font-medium text-ios-light-text-secondary dark:text-ios-dark-secondary mb-2">Format</label>
+                <label className="block text-sm font-medium text-light-label-secondary dark:text-dark-label-secondary mb-2">Format</label>
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                     <FormatButton value="md" label="Markdown" icon={MarkdownIcon} />
                     <FormatButton value="txt" label="Text" icon={FileTextIcon} />
@@ -256,11 +263,11 @@ const ExportModal: React.FC<ExportModalProps> = ({
                 </div>
             </div>
              <div>
-                <label className="block text-sm font-medium text-ios-light-text-secondary dark:text-ios-dark-secondary mb-2">Options</label>
-                <div className="bg-ios-light-header dark:bg-ios-dark-header rounded-lg p-2">
+                <label className="block text-sm font-medium text-light-label-secondary dark:text-dark-label-secondary mb-2">Options</label>
+                <div className="bg-light-fill-primary dark:bg-dark-fill-primary rounded-lg p-1">
                     <label htmlFor="include-code" className="flex items-center justify-between p-2 cursor-pointer">
-                        <span className="font-medium text-sm text-ios-light-text-primary dark:text-white">Include original code snippet</span>
-                        <div className={`w-10 h-6 rounded-full flex items-center transition-colors duration-200 ${includeCode ? 'bg-cyan-600' : 'bg-ios-light-tertiary dark:bg-ios-dark-tertiary'}`}>
+                        <span className="font-medium text-sm text-light-label-primary dark:text-dark-label-primary">Include project files</span>
+                        <div className={`relative w-10 h-6 rounded-full flex items-center transition-colors duration-200 ${includeCode ? 'bg-light-accent dark:bg-dark-accent' : 'bg-light-fill-secondary dark:bg-dark-fill-secondary'}`}>
                             <span className={`inline-block w-4 h-4 bg-white rounded-full transform transition-transform duration-200 mx-1 ${includeCode ? 'translate-x-4' : ''}`}></span>
                         </div>
                         <input id="include-code" type="checkbox" checked={includeCode} onChange={() => setIncludeCode(!includeCode)} className="sr-only"/>
@@ -269,14 +276,14 @@ const ExportModal: React.FC<ExportModalProps> = ({
             </div>
           </main>
 
-          <footer className="flex items-center justify-end flex-wrap gap-4 p-4 border-t border-ios-light-header dark:border-ios-dark-header flex-shrink-0">
-            <button onClick={onClose} className="bg-ios-light-header dark:bg-ios-dark-header hover:bg-ios-light-tertiary dark:hover:bg-ios-dark-tertiary text-ios-light-text-primary dark:text-white font-bold py-2 px-4 rounded-full transition-colors">
+          <footer className="flex items-center justify-end flex-wrap gap-4 p-4 border-t border-light-separator dark:border-dark-separator flex-shrink-0">
+            <button onClick={onClose} className="bg-light-fill-primary dark:bg-dark-fill-primary hover:bg-light-fill-secondary dark:hover:bg-dark-fill-secondary text-light-label-primary dark:text-dark-label-primary font-bold py-2 px-4 rounded-full transition-colors">
               Cancel
             </button>
             <button
               onClick={handleExport}
               disabled={isExporting}
-              className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-wait text-white font-bold py-2 px-4 rounded-full transition-colors flex items-center gap-2 min-w-[120px] justify-center"
+              className="bg-light-accent dark:bg-dark-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-wait text-white font-bold py-2 px-4 rounded-full transition-colors flex items-center gap-2 min-w-[120px] justify-center"
             >
               {isExporting ? (
                 <>
@@ -297,7 +304,7 @@ const ExportModal: React.FC<ExportModalProps> = ({
       {/* Hidden div for PDF generation */}
       <div className="absolute -z-10 -left-[9999px] -top-[9999px]">
         <div ref={pdfContentRef} className={`p-10 ${theme}`} style={{ width: '800px', fontFamily: 'Inter, sans-serif' }}>
-            <div className={`${theme === 'dark' ? 'dark bg-ios-dark-panel text-white' : 'bg-white text-black'}`}>
+            <div className={`${theme === 'dark' ? 'dark bg-dark-bg-elevated text-dark-label-primary' : 'bg-white text-light-label-primary'}`}>
                 <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{

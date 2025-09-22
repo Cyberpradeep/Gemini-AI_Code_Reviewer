@@ -25,7 +25,7 @@ const CopyButton: React.FC<CopyButtonProps> = ({ textToCopy }) => {
   return (
     <button
       onClick={handleCopy}
-      className="p-1.5 bg-ios-light-panel/60 dark:bg-ios-dark-panel/60 backdrop-blur-sm rounded-md text-ios-light-text-secondary dark:text-ios-dark-secondary hover:text-ios-light-text-primary dark:hover:text-white hover:bg-ios-light-header dark:hover:bg-ios-dark-header transition-all"
+      className="p-1.5 bg-light-bg-elevated/60 dark:bg-dark-bg-elevated/60 backdrop-blur-sm rounded-md text-light-label-secondary dark:text-dark-label-secondary hover:text-light-label-primary dark:hover:text-dark-label-primary hover:bg-light-fill-primary dark:hover:bg-dark-fill-primary transition-all"
       aria-label={isCopied ? 'Copied to clipboard' : 'Copy code to clipboard'}
     >
       {isCopied ? (

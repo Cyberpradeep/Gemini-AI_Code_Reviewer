@@ -12,38 +12,64 @@
         theme: {
           extend: {
             colors: {
-              // Light & Dark theme colors using CSS variables
-              'ios': {
-                light: {
-                  bg: '#F9F9F9',
-                  panel: '#FFFFFF',
-                  header: '#F0F0F0',
-                  secondary: '#8A8A8E',
-                  tertiary: '#E5E5EA',
-                  'text-primary': '#000000',
-                  'text-secondary': '#636366',
-                },
-                dark: {
-                  bg: '#000000',
-                  panel: '#1C1C1E',
-                  header: '#2C2C2E',
-                  secondary: '#8E8E93',
-                  tertiary: '#48484A',
-                  'text-primary': '#FFFFFF',
-                  'text-secondary': '#A0A0A5',
-                }
+              // Based on Apple's Human Interface Guidelines
+              'light': {
+                'bg-base': '#F6F6F6',
+                'bg-elevated': 'rgba(255, 255, 255, 0.7)',
+                'separator': 'rgba(0, 0, 0, 0.1)',
+                'fill-primary': 'rgba(128, 128, 128, 0.2)',
+                'fill-secondary': 'rgba(128, 128, 128, 0.12)',
+                'label-primary': '#000000',
+                'label-secondary': 'rgba(60, 60, 67, 0.6)',
+                'label-tertiary': 'rgba(60, 60, 67, 0.3)',
+                'accent': '#007AFF',
+              },
+              'dark': {
+                'bg-base': '#1C1C1E',
+                'bg-elevated': 'rgba(44, 44, 46, 0.7)',
+                'separator': 'rgba(255, 255, 255, 0.15)',
+                'fill-primary': 'rgba(128, 128, 128, 0.3)',
+                'fill-secondary': 'rgba(128, 128, 128, 0.2)',
+                'label-primary': '#FFFFFF',
+                'label-secondary': 'rgba(235, 235, 245, 0.6)',
+                'label-tertiary': 'rgba(235, 235, 245, 0.3)',
+                'accent': '#0A84FF',
               }
             },
             fontFamily: {
               sans: ['Inter', 'sans-serif'],
               mono: ['Fira Code', 'monospace'],
             },
+            fontSize: {
+              'xs': '0.75rem',  // 12px
+              'sm': '0.8125rem', // 13px
+              'base': '0.9375rem',// 15px
+              'lg': '1.125rem', // 18px
+              'xl': '1.25rem', // 20px
+            },
+            borderRadius: {
+              'lg': '0.75rem',
+              'xl': '1rem',
+              '2xl': '1.25rem',
+              '3xl': '1.5rem',
+            },
+            boxShadow: {
+              'subtle': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+              'md': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+              'lg': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+              'xl': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            },
             animation: {
-              'fade-in': 'fadeIn 0.4s ease-in-out',
+              'fade-in': 'fadeIn 0.3s ease-out',
+              'slide-up-fade': 'slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
             },
             keyframes: {
               fadeIn: {
-                '0%': { opacity: '0', transform: 'translateY(8px)' },
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              slideUpFade: {
+                '0%': { opacity: '0', transform: 'translateY(24px)' },
                 '100%': { opacity: '1', transform: 'translateY(0)' },
               },
             }
@@ -62,12 +88,13 @@
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.20.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
     "jspdf": "https://esm.sh/jspdf@2.5.1",
-    "html2canvas": "https://esm.sh/html2canvas@1.4.1"
+    "html2canvas": "https://esm.sh/html2canvas@1.4.1",
+    "jszip": "https://esm.sh/jszip@3.10.1"
   }
 }
 </script>
 </head>
-  <body class="bg-ios-light-bg dark:bg-black text-ios-light-text-primary dark:text-white font-sans">
+  <body class="bg-light-bg-base dark:bg-dark-bg-base text-light-label-primary dark:text-dark-label-primary font-sans">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

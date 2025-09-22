@@ -7,7 +7,7 @@ interface SpinnerProps {
 const Spinner: React.FC<SpinnerProps> = ({ className = "h-12 w-12" }) => {
   return (
     <svg
-      className={`animate-spin text-cyan-400 ${className}`}
+      className={`animate-spin text-light-accent dark:text-dark-accent ${className}`}
       xmlns="http://www.w3.org/2000/svg"
       fill="none"
       viewBox="0 0 24 24"

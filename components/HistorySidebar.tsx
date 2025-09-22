@@ -1,108 +1,131 @@
 import React from 'react';
-import type { ReviewHistoryItem, Theme } from '../App';
-import { PlusIcon } from './icons/PlusIcon';
+import type { HistoryItem, Theme } from '../App';
 import { ThemeToggle } from './ThemeToggle';
+import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
+import { PlusIcon } from './icons/PlusIcon';
+import { HistoryIcon } from './icons/HistoryIcon';
 import LanguageIcon from './LanguageIcon';
-
-interface Language {
-  value: string;
-  label: string;
-}
+import { SUPPORTED_LANGUAGES } from '../constants';
+import { ProjectIcon } from './icons/ProjectIcon';
 
 interface HistorySidebarProps {
-  history: ReviewHistoryItem[];
-  languages: Language[];
-  selectedId: string | null;
-  onSelectItem: (id: string) => void;
-  onNewReview: () => void;
   isOpen: boolean;
-  onToggle: () => void;
+  onClose: () => void;
+  history: HistoryItem[];
+  onLoad: (item: HistoryItem) => void;
+  onDelete: (id: string) => void;
+  onNew: () => void;
   theme: Theme;
-  onThemeToggle: () => void;
+  onToggleTheme: () => void;
 }
 
-const HistorySidebar: React.FC<HistorySidebarProps> = ({ 
-  history, languages, selectedId, onSelectItem, onNewReview, isOpen, onToggle, theme, onThemeToggle 
-}) => {
-  const getLanguageLabel = (value: string) => {
-    return languages.find(l => l.value === value)?.label || value;
-  };
+const TrashIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <polyline points="3 6 5 6 21 6"></polyline>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        <line x1="10" y1="11" x2="10" y2="17"></line>
+        <line x1="14" y1="11" x2="14" y2="17"></line>
+    </svg>
+);
 
+const HistorySidebar: React.FC<HistorySidebarProps> = ({
+  isOpen,
+  onClose,
+  history,
+  onLoad,
+  onDelete,
+  onNew,
+  theme,
+  onToggleTheme,
+}) => {
   return (
     <>
-      {/* Backdrop for mobile, which also closes the sidebar */}
-      <div 
-        className={`fixed inset-0 bg-black/20 z-30 transition-opacity duration-300 lg:hidden ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        onClick={onToggle}
-        aria-hidden="true"
+      <div
+        className={`fixed inset-0 z-30 bg-black/30 backdrop-blur-sm transition-opacity lg:hidden ${
+          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={onClose}
       ></div>
-
-      {/* Sidebar container */}
-      <aside className={`fixed top-0 left-0 h-full w-72 bg-ios-light-header/80 dark:bg-ios-dark-header/80 backdrop-blur-xl z-40
-                         border-r border-ios-light-tertiary/70 dark:border-ios-dark-tertiary/70
-                         transition-transform duration-300 ease-in-out
-                         lg:static lg:w-80 lg:bg-ios-light-bg lg:dark:bg-black lg:border-r lg:border-ios-light-header lg:dark:border-ios-dark-panel lg:backdrop-blur-none
-                         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="h-full flex flex-col">
-          {/* Header */}
-          <div className="p-4 flex items-center justify-between flex-shrink-0 lg:p-5 lg:pt-6">
-              <h1 className="text-2xl font-bold text-ios-light-text-primary dark:text-white ml-2">History</h1>
+      <aside
+        className={`bg-light-bg-elevated/80 dark:bg-dark-bg-elevated/80 backdrop-blur-xl border-r border-light-separator dark:border-dark-separator flex flex-col h-full w-64 md:w-72 transition-transform duration-300 ease-in-out z-40 fixed lg:static lg:translate-x-0 ${
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="p-4 border-b border-light-separator dark:border-dark-separator flex items-center justify-between h-16">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-light-label-primary dark:text-dark-label-primary">History</h2>
           </div>
-
-          {/* New Review Button */}
-          <div className="px-4 pb-2 flex-shrink-0">
+          <button
+            onClick={onClose}
+            className="p-2 -mr-2 rounded-full lg:hidden text-light-label-secondary dark:text-dark-label-secondary hover:bg-light-fill-primary dark:hover:bg-dark-fill-primary"
+          >
+            <ChevronLeftIcon className="h-5 w-5" />
+          </button>
+        </div>
+        
+        <div className="p-2">
             <button
-                onClick={onNewReview}
-                className="w-full flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors duration-200 text-base shadow-md"
-                aria-label="Start a new review"
+                onClick={onNew}
+                className="w-full flex items-center justify-center gap-2 bg-light-accent dark:bg-dark-accent hover:opacity-90 text-white font-semibold py-2 px-3 rounded-lg transition-opacity text-sm"
             >
-                <PlusIcon className="h-5 w-5" />
-                New Review
+                <PlusIcon className="h-5 w-5" /> New Review
             </button>
-          </div>
+        </div>
 
-          {/* History List */}
-          <div className="flex-grow overflow-y-auto px-4 py-4">
-            {history.length === 0 ? (
-              <div className="text-center text-ios-light-text-secondary dark:text-ios-dark-secondary px-4 py-8">
-                <p className="text-sm">Your previous code reviews will be saved here.</p>
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+          {history.length > 0 && (
+             <div className="px-2 pt-4 pb-1">
+                <p className="text-xs font-semibold text-light-label-secondary dark:text-dark-label-secondary uppercase">Recent</p>
+            </div>
+          )}
+          {history.map(item => {
+            const isProject = item.inputMode === 'project';
+            const title = isProject 
+              ? item.projectFiles[0]?.path.split('/')[0] || 'Project Review'
+              : `${SUPPORTED_LANGUAGES.find(l => l.value === item.language)?.label || 'Code'} Snippet`;
+            
+            return (
+              <div key={item.id} className="group relative rounded-md">
+                <button
+                  onClick={() => onLoad(item)}
+                  className="w-full text-left p-2 rounded-md hover:bg-light-fill-primary dark:hover:bg-dark-fill-primary transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                      {isProject ? (
+                          <ProjectIcon className="h-5 w-5 flex-shrink-0 text-light-label-secondary dark:text-dark-label-secondary"/>
+                      ) : (
+                          <LanguageIcon language={item.language} className="h-5 w-5 flex-shrink-0 text-light-label-secondary dark:text-dark-label-secondary"/>
+                      )}
+                      <div className="flex-1 truncate">
+                          <p className="font-medium text-sm truncate text-light-label-primary dark:text-dark-label-primary">
+                            {title}
+                          </p>
+                          <p className="text-xs text-light-label-secondary dark:text-dark-label-secondary">
+                            {new Date(item.timestamp).toLocaleString()}
+                          </p>
+                      </div>
+                  </div>
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
+                  className="absolute top-1/2 -translate-y-1/2 right-2 p-1.5 rounded-full text-light-label-secondary dark:text-dark-label-secondary hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/10 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="Delete history item"
+                >
+                  <TrashIcon className="h-4 w-4" />
+                </button>
               </div>
-            ) : (
-              <div className="bg-ios-light-panel dark:bg-ios-dark-panel rounded-xl shadow-inner">
-                 <ul className="divide-y divide-ios-light-header dark:divide-ios-dark-header">
-                  {history.map((item) => (
-                    <li key={item.id}>
-                      <button
-                        onClick={() => onSelectItem(item.id)}
-                        className={`w-full text-left p-3 transition-colors duration-150 flex items-center gap-4 ${
-                          selectedId === item.id
-                            ? 'bg-cyan-600'
-                            : 'hover:bg-ios-light-header/50 dark:hover:bg-ios-dark-header/50'
-                        }`}
-                      >
-                        <div className={`flex-shrink-0 rounded-lg p-2 ${selectedId === item.id ? 'bg-white/20' : 'bg-ios-light-header dark:bg-ios-dark-header'}`}>
-                           <LanguageIcon language={item.language} className={`h-6 w-6 ${selectedId === item.id ? 'text-white' : 'text-cyan-600 dark:text-cyan-400'}`} />
-                        </div>
-                        <div className="flex-1 overflow-hidden">
-                           <p className={`font-semibold truncate ${selectedId === item.id ? 'text-white' : 'text-ios-light-text-primary dark:text-white'}`}>{getLanguageLabel(item.language)}</p>
-                           <p className={`text-xs mt-1 truncate ${selectedId === item.id ? 'text-cyan-100' : 'text-ios-light-text-secondary dark:text-ios-dark-secondary'}`}>
-                              {new Date(item.timestamp).toLocaleString()}
-                           </p>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
+            );
+          })}
+          {history.length === 0 && (
+            <div className="p-4 text-center text-sm text-light-label-secondary dark:text-dark-label-secondary flex flex-col items-center justify-center h-full">
+                <HistoryIcon className="h-10 w-10 mb-2" />
+                <p>No past reviews found.</p>
+            </div>
+          )}
+        </div>
 
-          {/* Footer with Theme Toggle */}
-          <div className="p-4 flex-shrink-0">
-             <div className="bg-ios-light-panel dark:bg-ios-dark-panel rounded-xl p-2 shadow-inner">
-                <ThemeToggle theme={theme} onToggle={onThemeToggle} />
-             </div>
-          </div>
+        <div className="p-2 border-t border-light-separator dark:border-dark-separator">
+          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
         </div>
       </aside>
     </>
