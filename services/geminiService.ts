@@ -43,7 +43,8 @@ const generateStreamReviewPrompt = (files: ProjectFile[], focusAreas: string[]):
 
   return `Please perform a holistic code review of the following ${reviewSubject}. Analyze the code for bugs, performance issues, security vulnerabilities, and adherence to best practices. For projects with multiple files, consider the interactions between them.
 ${focusPrompt}
-Provide your feedback as a stream of individual, newline-separated JSON objects. Each JSON object must represent a single finding in a specific file. The JSON object must conform to this schema:
+
+Your entire response must be a stream of individual JSON objects, with each object separated by a newline. Each JSON object represents a single finding and MUST conform to this exact schema:
 {
   "category": "string (one of: ${REVIEW_FOCUS_AREAS.join(', ')})",
   "severity": "string (one of: 'Critical', 'High', 'Medium', 'Low', 'Info')",
@@ -53,7 +54,13 @@ Provide your feedback as a stream of individual, newline-separated JSON objects.
   "suggestion": { "before": "string", "after": "string" } | null,
   "learnMoreUrl": "string" | null
 }
-Do not wrap the output in a JSON array. Start streaming the JSON objects immediately.
+
+IMPORTANT:
+- Each JSON object MUST be a single, minified line of text. DO NOT use pretty-print formatting.
+- DO NOT wrap the output in a JSON array or use commas between objects.
+- DO NOT output ANY other text, introductions, summaries, or markdown formatting like \`\`\`json before or after the stream.
+
+Start streaming the JSON objects immediately.
 
 ${fileHeader}
 ${formatProjectFiles(files)}
@@ -82,27 +89,52 @@ export const performCodeReview = async (
     for await (const chunk of resultStream) {
         buffer += chunk.text;
         
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // Keep the last, possibly incomplete, line in buffer
+        let lastProcessedIndex = 0;
+        while (true) {
+            const startIndex = buffer.indexOf('{', lastProcessedIndex);
+            if (startIndex === -1) break;
 
-        for (const line of lines) {
-            if (line.trim()) {
-                try {
-                    const finding = JSON.parse(line) as ReviewFinding;
-                    onChunkReceived(finding);
-                } catch (e) {
-                    console.warn("Could not parse streamed JSON object:", line, e);
+            let braceCount = 1;
+            let endIndex = -1;
+            for (let i = startIndex + 1; i < buffer.length; i++) {
+                if (buffer[i] === '{') braceCount++;
+                else if (buffer[i] === '}') braceCount--;
+                
+                if (braceCount === 0) {
+                    endIndex = i;
+                    break;
                 }
             }
+
+            if (endIndex !== -1) {
+                const jsonString = buffer.substring(startIndex, endIndex + 1);
+                try {
+                    const finding = JSON.parse(jsonString) as ReviewFinding;
+                    onChunkReceived(finding);
+                    lastProcessedIndex = endIndex + 1;
+                } catch (e) {
+                    console.warn("Could not parse streamed JSON object:", jsonString, e);
+                    lastProcessedIndex = startIndex + 1; // Skip malformed start
+                }
+            } else {
+                // Incomplete object, wait for more data
+                break;
+            }
+        }
+
+        if (lastProcessedIndex > 0) {
+            buffer = buffer.substring(lastProcessedIndex);
         }
     }
 
-    if (buffer.trim()) {
+    // Final cleanup and parse for any remaining buffer content
+    const cleanedBuffer = buffer.replace(/```/g, '').trim();
+    if (cleanedBuffer.startsWith('{') && cleanedBuffer.endsWith('}')) {
         try {
-            const finding = JSON.parse(buffer) as ReviewFinding;
+            const finding = JSON.parse(cleanedBuffer) as ReviewFinding;
             onChunkReceived(finding);
         } catch (e) {
-            console.warn("Could not parse final buffered JSON object:", buffer, e);
+            console.warn("Could not parse final buffered JSON object:", cleanedBuffer, e);
         }
     }
 
