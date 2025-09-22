@@ -3,7 +3,6 @@ import JSZip from 'jszip';
 import type { ProjectFile } from '../App';
 import { XIcon } from './icons/XIcon';
 import { ZipIcon } from './icons/ZipIcon';
-import { GitIcon } from './icons/GitIcon';
 import Spinner from './Spinner';
 
 interface ProjectImportModalProps {
@@ -13,8 +12,6 @@ interface ProjectImportModalProps {
 }
 
 const ProjectImportModal: React.FC<ProjectImportModalProps> = ({ isOpen, onClose, onProjectImport }) => {
-  const [activeTab, setActiveTab] = useState<'zip' | 'git'>('zip');
-  const [gitUrl, setGitUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,7 +27,10 @@ const ProjectImportModal: React.FC<ProjectImportModalProps> = ({ isOpen, onClose
       zip.forEach((relativePath, zipEntry) => {
         if (!zipEntry.dir) {
           const promise = zipEntry.async('string').then(content => {
-            projectFiles.push({ path: relativePath, content });
+            // Basic filter for unwanted files often found in zips
+            if (!relativePath.startsWith('__MACOSX/') && !relativePath.endsWith('.DS_Store')) {
+               projectFiles.push({ path: relativePath, content });
+            }
           });
           promises.push(promise);
         }
@@ -58,45 +58,16 @@ const ProjectImportModal: React.FC<ProjectImportModalProps> = ({ isOpen, onClose
     event.preventDefault();
     event.stopPropagation();
     const file = event.dataTransfer.files?.[0];
-    if (file && file.type === "application/zip") {
+    if (file && (file.type === "application/zip" || file.type === "application/x-zip-compressed")) {
       handleZipFile(file);
     } else {
       setError("Please drop a valid .zip file.");
     }
-  }, []);
+  }, [onProjectImport]);
   
   const onDragOver = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-  };
-
-  const handleGitImport = async () => {
-    if (!gitUrl.trim()) {
-      setError('Please enter a valid GitHub repository URL.');
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    try {
-        const response = await fetch('/api/import-git', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: gitUrl }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to import repository.');
-        }
-
-        onProjectImport(data);
-
-    } catch (e: any) {
-        setError(e.message || 'An unexpected error occurred.');
-    } finally {
-        setIsLoading(false);
-    }
   };
 
   if (!isOpen) return null;
@@ -106,22 +77,13 @@ const ProjectImportModal: React.FC<ProjectImportModalProps> = ({ isOpen, onClose
       <div className="absolute inset-0 bg-black/30" onClick={onClose}></div>
       <div className="relative z-10 w-full max-w-lg bg-light-bg-elevated/80 dark:bg-dark-bg-elevated/80 backdrop-blur-xl rounded-3xl shadow-2xl flex flex-col border border-light-separator dark:border-dark-separator overflow-hidden animate-slide-up-fade">
         <header className="flex items-center justify-between p-4 border-b border-light-separator dark:border-dark-separator flex-shrink-0">
-          <h2 className="text-lg font-semibold text-light-label-primary dark:text-dark-label-primary">Import Project</h2>
+          <h2 className="text-lg font-semibold text-light-label-primary dark:text-dark-label-primary">Import Project from .ZIP</h2>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-light-fill-primary dark:hover:bg-dark-fill-primary text-light-label-secondary dark:text-dark-label-secondary" aria-label="Close import dialog">
             <XIcon className="h-5 w-5" />
           </button>
         </header>
 
         <main className="p-6">
-          <div className="bg-light-fill-primary dark:bg-dark-fill-primary p-1 rounded-xl flex items-center mb-6">
-            <button onClick={() => setActiveTab('zip')} className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 ${activeTab === 'zip' ? 'bg-light-bg-elevated dark:bg-dark-bg-elevated shadow-subtle text-light-label-primary dark:text-dark-label-primary' : 'text-light-label-secondary dark:text-dark-label-secondary'}`}>
-              <ZipIcon className="h-5 w-5" /> Upload ZIP
-            </button>
-            <button onClick={() => setActiveTab('git')} className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 ${activeTab === 'git' ? 'bg-light-bg-elevated dark:bg-dark-bg-elevated shadow-subtle text-light-label-primary dark:text-dark-label-primary' : 'text-light-label-secondary dark:text-dark-label-secondary'}`}>
-              <GitIcon className="h-5 w-5" /> Import from Git
-            </button>
-          </div>
-
           {isLoading ? (
             <div className="h-48 flex flex-col items-center justify-center">
               <Spinner />
@@ -130,38 +92,17 @@ const ProjectImportModal: React.FC<ProjectImportModalProps> = ({ isOpen, onClose
           ) : (
             <>
               {error && <div className="bg-red-500/10 border border-red-500/20 text-red-500 dark:text-red-400 text-sm rounded-lg p-3 mb-4">{error}</div>}
-              {activeTab === 'zip' && (
-                <div 
-                    onDrop={onDrop}
-                    onDragOver={onDragOver}
-                    className="border-2 border-dashed border-light-separator dark:border-dark-separator rounded-xl p-8 text-center cursor-pointer hover:border-light-accent dark:hover:border-dark-accent hover:bg-light-fill-primary/50 dark:hover:bg-dark-fill-primary/50 transition-colors"
-                    onClick={() => document.getElementById('zip-upload')?.click()}
-                >
-                  <input type="file" id="zip-upload" accept=".zip" onChange={handleFileChange} className="hidden" />
-                  <ZipIcon className="h-12 w-12 mx-auto text-light-label-tertiary dark:text-dark-label-tertiary mb-4" />
-                  <p className="font-semibold text-light-label-primary dark:text-dark-label-primary">Drop your .zip file here</p>
-                  <p className="text-sm text-light-label-secondary dark:text-dark-label-secondary mt-1">or click to browse</p>
-                </div>
-              )}
-              {activeTab === 'git' && (
-                <div className="space-y-4">
-                    <div>
-                        <input
-                            type="text"
-                            value={gitUrl}
-                            onChange={(e) => setGitUrl(e.target.value)}
-                            placeholder="https://github.com/owner/repository"
-                            className="w-full bg-light-fill-primary dark:bg-dark-fill-primary text-light-label-primary dark:text-dark-label-primary font-sans focus:outline-none focus:ring-2 focus:ring-light-accent dark:focus:ring-dark-accent p-3 text-base rounded-xl"
-                        />
-                        <p className="text-xs text-light-label-secondary dark:text-dark-label-secondary mt-2 px-1">
-                            Note: This feature is for public GitHub repositories only.
-                        </p>
-                    </div>
-                    <button onClick={handleGitImport} className="w-full bg-light-accent dark:bg-dark-accent hover:opacity-90 text-white font-bold py-3 px-4 rounded-full transition-colors">
-                        Import Repository
-                    </button>
-                </div>
-              )}
+              <div 
+                  onDrop={onDrop}
+                  onDragOver={onDragOver}
+                  className="border-2 border-dashed border-light-separator dark:border-dark-separator rounded-xl p-8 text-center cursor-pointer hover:border-light-accent dark:hover:border-dark-accent hover:bg-light-fill-primary/50 dark:hover:bg-dark-fill-primary/50 transition-colors"
+                  onClick={() => document.getElementById('zip-upload')?.click()}
+              >
+                <input type="file" id="zip-upload" accept=".zip,application/zip,application/x-zip-compressed" onChange={handleFileChange} className="hidden" />
+                <ZipIcon className="h-12 w-12 mx-auto text-light-label-tertiary dark:text-dark-label-tertiary mb-4" />
+                <p className="font-semibold text-light-label-primary dark:text-dark-label-primary">Drop your .zip file here</p>
+                <p className="text-sm text-light-label-secondary dark:text-dark-label-secondary mt-1">or click to browse</p>
+              </div>
             </>
           )}
         </main>

@@ -4,23 +4,21 @@ import type { ReviewFinding, ProjectFile } from '../App';
 
 let ai: GoogleGenAI | null = null;
 
-const getAiClient = async (): Promise<GoogleGenAI> => {
-  if (ai) return ai;
-  try {
-    const response = await fetch('/api/get-key');
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch API key from server.' }));
-        throw new Error(errorData.error);
-    }
-    const { apiKey } = await response.json();
-    if (!apiKey) throw new Error("API key was not returned from the server.");
-    
-    ai = new GoogleGenAI({ apiKey });
+const getAiClient = (): GoogleGenAI => {
+  if (ai) {
     return ai;
-  } catch (error) {
-    console.error("Error initializing AI client:", error);
-    throw new Error("Could not connect to the AI service. Please ensure the API_KEY is set correctly in your Vercel project settings.");
   }
+  
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    // This is a critical error and should stop the app from proceeding.
+    // The user-facing error will be thrown from the calling function.
+    console.error("API_KEY environment variable not found.");
+    throw new Error("API_KEY is not configured. Please ensure it is set in the project environment settings.");
+  }
+
+  ai = new GoogleGenAI({ apiKey });
+  return ai;
 };
 
 const formatProjectFiles = (files: ProjectFile[]): string => {
@@ -78,7 +76,7 @@ export const performCodeReview = async (
   onChunkReceived: (finding: ReviewFinding) => void,
 ): Promise<{ userPrompt: string; }> => {
   try {
-    const aiClient = await getAiClient();
+    const aiClient = getAiClient();
     const userPrompt = generateStreamReviewPrompt(files, focusAreas);
 
     const resultStream = await aiClient.models.generateContentStream({
@@ -188,7 +186,7 @@ const generateAiAction = async (
   action: 'test' | 'docs'
 ): Promise<{ response: string; userPrompt: string; }> => {
   try {
-    const aiClient = await getAiClient();
+    const aiClient = getAiClient();
     const userPrompt = generateActionPrompt(code, language, projectFiles, targetFilePath, action);
 
     const result = await aiClient.models.generateContent({
@@ -219,7 +217,7 @@ export const sendFollowUpMessage = async (
   history: Content[],
 ): Promise<{ response: string; updatedHistory: Content[] }> => {
   try {
-    const aiClient = await getAiClient();
+    const aiClient = getAiClient();
     const chat = aiClient.chats.create({
       model: 'gemini-2.5-flash',
       history,
