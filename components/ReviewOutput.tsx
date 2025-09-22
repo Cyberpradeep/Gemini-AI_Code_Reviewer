@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Spinner from './Spinner';
 import ReactMarkdown from 'https://esm.sh/react-markdown@9';
 import remarkGfm from 'https://esm.sh/remark-gfm@4';
@@ -43,15 +43,20 @@ const SuggestionBlock: React.FC<{
   theme: Theme;
   onApplyFix: (before: string, after: string) => void;
   onPreviewFix: (before: string, after: string, language: string) => void;
-  codeBorderColor: string;
-  codeBgColor: string;
   syntaxTheme: any;
-}> = ({ suggestion, language, theme, onApplyFix, onPreviewFix, codeBorderColor, codeBgColor, syntaxTheme }) => (
+}> = ({ suggestion, language, theme, onApplyFix, onPreviewFix, syntaxTheme }) => (
   <div className="my-4 space-y-4">
     <div>
-      <p className="text-sm font-medium text-ios-light-text-secondary dark:text-ios-dark-secondary mb-2">Before:</p>
-      <div className="relative group">
-        <SyntaxHighlighter language={language} style={syntaxTheme} customStyle={{ margin: 0, padding: '1rem', backgroundColor: codeBgColor, borderRadius: '0.5rem' }} codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }}>
+      <p className="text-sm font-medium text-red-700 dark:text-red-400 mb-2">Before:</p>
+      <div className="relative group rounded-lg overflow-hidden bg-red-500/5 dark:bg-red-500/10 border border-red-500/10 dark:border-red-500/20">
+        <SyntaxHighlighter
+          language={language}
+          style={syntaxTheme}
+          customStyle={{ margin: 0, padding: '1rem', backgroundColor: 'transparent' }}
+          codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }}
+          showLineNumbers={true}
+          lineNumberStyle={{ opacity: 0.6, minWidth: '2.25em' }}
+        >
           {suggestion.before || ''}
         </SyntaxHighlighter>
         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -77,8 +82,15 @@ const SuggestionBlock: React.FC<{
           </button>
         </div>
       </div>
-      <div className="relative group">
-        <SyntaxHighlighter language={language} style={syntaxTheme} customStyle={{ margin: 0, padding: '1rem', backgroundColor: codeBgColor, borderRadius: '0.5rem' }} codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }}>
+      <div className="relative group rounded-lg overflow-hidden bg-green-500/5 dark:bg-green-500/10 border border-green-500/10 dark:border-green-500/20">
+        <SyntaxHighlighter
+          language={language}
+          style={syntaxTheme}
+          customStyle={{ margin: 0, padding: '1rem', backgroundColor: 'transparent' }}
+          codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }}
+          showLineNumbers={true}
+          lineNumberStyle={{ opacity: 0.6, minWidth: '2.25em' }}
+        >
           {suggestion.after || ''}
         </SyntaxHighlighter>
         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -107,8 +119,8 @@ const MarkdownContent: React.FC<{ content: string; theme: Theme }> = ({ content,
                     if (!inline && match) {
                         const codeString = String(children).replace(/\n$/, '');
                         return (
-                            <div className="relative group my-4">
-                                <SyntaxHighlighter style={syntaxTheme} language={match[1]} PreTag="div" customStyle={{ padding: '1rem', backgroundColor: codeBgColor, borderRadius: '0.5rem' }} codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }} {...props}>
+                            <div className="relative group my-4 rounded-lg overflow-hidden bg-ios-light-header dark:bg-ios-dark-header">
+                                <SyntaxHighlighter style={syntaxTheme} language={match[1]} PreTag="div" customStyle={{ padding: '1rem', backgroundColor: 'transparent' }} codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }} {...props} showLineNumbers lineNumberStyle={{opacity: 0.6, minWidth: '2.25em'}}>
                                     {codeString}
                                 </SyntaxHighlighter>
                                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -126,11 +138,38 @@ const MarkdownContent: React.FC<{ content: string; theme: Theme }> = ({ content,
     );
 };
 
+const loadingMessages = [
+    "Connecting to Gemini...",
+    "Analyzing code structure...",
+    "Evaluating for best practices...",
+    "Checking for security vulnerabilities...",
+    "Assessing performance...",
+    "Compiling suggestions...",
+];
+
 const ReviewOutput: React.FC<ReviewOutputProps> = ({ conversation, isLoading, isChatting, error, theme, code, language, onSendMessage, onApplyFix, onPreviewFix }) => {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [currentLoadingMessage, setCurrentLoadingMessage] = useState(loadingMessages[0]);
+  
   const syntaxTheme = theme === 'dark' ? vscDarkPlus : vs;
-  const codeBgColor = theme === 'dark' ? '#2C2C2E' : '#F0F0F0';
   const codeBorderColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+
+  useEffect(() => {
+    let interval: number | undefined;
+    if (isLoading) {
+        let i = 0;
+        setCurrentLoadingMessage(loadingMessages[0]); // Reset on new load
+        interval = window.setInterval(() => {
+            i = (i + 1) % loadingMessages.length;
+            setCurrentLoadingMessage(loadingMessages[i]);
+        }, 1800);
+    }
+    return () => {
+        if (interval) {
+            clearInterval(interval);
+        }
+    };
+  }, [isLoading]);
 
   const renderContent = () => {
     if (isLoading) {
@@ -138,7 +177,7 @@ const ReviewOutput: React.FC<ReviewOutputProps> = ({ conversation, isLoading, is
         <div className="flex flex-col items-center justify-center h-full text-ios-light-text-secondary dark:text-ios-dark-secondary">
           <Spinner />
           <p className="mt-4 text-lg">AI is analyzing your code...</p>
-          <p className="text-sm">This may take a moment.</p>
+          <p className="text-sm transition-opacity duration-300">{currentLoadingMessage}</p>
         </div>
       );
     }
@@ -191,7 +230,7 @@ const ReviewOutput: React.FC<ReviewOutputProps> = ({ conversation, isLoading, is
                                 <MarkdownContent content={finding.summary} theme={theme} />
                             </div>
                             {finding.suggestion && (
-                                <SuggestionBlock suggestion={finding.suggestion} language={language} theme={theme} onApplyFix={onApplyFix} onPreviewFix={onPreviewFix} codeBorderColor={codeBorderColor} codeBgColor={codeBgColor} syntaxTheme={syntaxTheme} />
+                                <SuggestionBlock suggestion={finding.suggestion} language={language} theme={theme} onApplyFix={onApplyFix} onPreviewFix={onPreviewFix} syntaxTheme={syntaxTheme} />
                             )}
                             {finding.learnMoreUrl && (
                                 <div className="mt-4">
