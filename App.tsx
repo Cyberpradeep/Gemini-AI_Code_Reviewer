@@ -3,25 +3,38 @@ import CodeInput from './components/CodeInput';
 import ReviewOutput from './components/ReviewOutput';
 import HistorySidebar from './components/HistorySidebar';
 import PreviewModal from './components/PreviewModal';
-import { sendChatMessage } from './services/geminiService';
-import { SUPPORTED_LANGUAGES, HISTORY_STORAGE_KEY } from './constants';
+import { performCodeReview, generateUnitTests, generateDocumentation, sendFollowUpMessage } from './services/geminiService';
+import { SUPPORTED_LANGUAGES, HISTORY_STORAGE_KEY, AI_PERSONAS } from './constants';
 import { MenuIcon } from './components/icons/MenuIcon';
 import type { Content } from "@google/genai";
 
+export interface ReviewFinding {
+  category: 'Correctness & Bugs' | 'Best Practices & Readability' | 'Performance' | 'Security' | 'Maintainability';
+  severity: 'Critical' | 'High' | 'Medium' | 'Low' | 'Info';
+  title: string;
+  summary: string;
+  suggestion?: {
+    before: string;
+    after: string;
+  };
+  learnMoreUrl?: string;
+}
+
 export interface ChatMessage {
   role: 'user' | 'model';
-  content: string;
+  content: string | ReviewFinding[];
 }
 export interface ReviewHistoryItem {
   id: string;
   code: string;
   language: string;
-  review: string; // The initial review text, for display in history list.
+  review: string | ReviewFinding[]; // The initial review object or string
   timestamp: number;
   chatHistory: Content[];
 }
 
 export type Theme = 'light' | 'dark';
+export type AiAction = 'review' | 'test' | 'docs';
 
 interface PreviewState {
   before: string;
@@ -42,6 +55,7 @@ const App: React.FC = () => {
   const [isMounted, setIsMounted] = useState(false);
   const [theme, setTheme] = useState<Theme>('dark');
   const [reviewFocus, setReviewFocus] = useState<string[]>([]);
+  const [persona, setPersona] = useState<string>(AI_PERSONAS[0].value);
   const [previewingFix, setPreviewingFix] = useState<PreviewState | null>(null);
 
 
@@ -91,9 +105,9 @@ const App: React.FC = () => {
     setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
   };
 
-  const handleReview = useCallback(async () => {
+  const handleAiAction = useCallback(async (action: AiAction) => {
     if (!code.trim()) {
-      setError('Please enter some code to review.');
+      setError('Please enter some code first.');
       return;
     }
 
@@ -103,12 +117,27 @@ const App: React.FC = () => {
     setSelectedHistoryId(null);
 
     try {
-      const { response, updatedHistory } = await sendChatMessage(
-        '', // No message needed for initial review
-        [], // Empty history
-        true, // isNewReview
-        code, language, reviewFocus
-      );
+        let response: string | ReviewFinding[];
+        let userPrompt: string;
+        let modelResponseContent: string;
+        
+        const personaInstruction = AI_PERSONAS.find(p => p.value === persona)?.instruction || AI_PERSONAS[0].instruction;
+
+        switch (action) {
+            case 'test':
+                ({ response, userPrompt } = await generateUnitTests(code, language, personaInstruction));
+                modelResponseContent = response;
+                break;
+            case 'docs':
+                ({ response, userPrompt } = await generateDocumentation(code, language, personaInstruction));
+                modelResponseContent = response;
+                break;
+            case 'review':
+            default:
+                ({ response, userPrompt } = await performCodeReview(code, language, reviewFocus, personaInstruction));
+                modelResponseContent = JSON.stringify(response);
+                break;
+        }
       
       setActiveConversation([{ role: 'model', content: response }]);
 
@@ -118,7 +147,10 @@ const App: React.FC = () => {
         language,
         review: response,
         timestamp: Date.now(),
-        chatHistory: updatedHistory,
+        chatHistory: [
+          { role: 'user', parts: [{ text: userPrompt }] },
+          { role: 'model', parts: [{ text: modelResponseContent }] }
+        ],
       };
 
       const updatedReviewHistory = [newHistoryItem, ...reviewHistory];
@@ -130,12 +162,12 @@ const App: React.FC = () => {
       if (e instanceof Error) {
         setError(`An error occurred: ${e.message}`);
       } else {
-        setError('An unknown error occurred during the review.');
+        setError('An unknown error occurred.');
       }
     } finally {
       setIsLoading(false);
     }
-  }, [code, language, reviewHistory, reviewFocus]);
+  }, [code, language, reviewHistory, reviewFocus, persona]);
 
   const handleSelectHistoryItem = (id: string) => {
     const item = reviewHistory.find(item => item.id === id);
@@ -144,17 +176,26 @@ const App: React.FC = () => {
       setLanguage(item.language);
       setSelectedHistoryId(item.id);
       
+      // The first model response is the main review/generation. Others are chat.
       const conversation: ChatMessage[] = item.chatHistory
-        .filter(entry => {
-            const text = entry.parts[0].text || '';
-            return !(entry.role === 'user' && text.startsWith('Act as a world-class'));
-        })
-        .map(entry => ({
-          role: entry.role as 'user' | 'model',
-          content: entry.parts[0].text || '',
-        }));
-      setActiveConversation(conversation);
+        .filter(entry => entry.role !== 'user' || !entry.parts[0].text?.startsWith('Act as a')) // Filter out initial system prompt-like user messages
+        .map((entry, index) => {
+            const content = entry.parts[0].text || '';
+            if (entry.role === 'model' && index === 1) { // First model response
+                try {
+                    // Try to parse as JSON (structured review), fallback to string
+                    return { role: 'model', content: JSON.parse(content) };
+                } catch {
+                    return { role: 'model', content: content };
+                }
+            }
+            return {
+                role: entry.role as 'user' | 'model',
+                content: content,
+            };
+        });
 
+      setActiveConversation(conversation);
       setError(null);
       setIsLoading(false);
       if (window.innerWidth < 1024) {
@@ -184,10 +225,9 @@ const App: React.FC = () => {
     setActiveConversation(prev => [...prev, userMessage]);
 
     try {
-      const { response, updatedHistory } = await sendChatMessage(
+      const { response, updatedHistory } = await sendFollowUpMessage(
         message,
-        currentItem.chatHistory,
-        false
+        currentItem.chatHistory
       );
 
       const modelMessage: ChatMessage = { role: 'model', content: response };
@@ -267,10 +307,12 @@ const App: React.FC = () => {
                 language={language}
                 setLanguage={setLanguage}
                 languages={SUPPORTED_LANGUAGES}
-                onSubmit={handleReview}
+                onAiAction={handleAiAction}
                 isLoading={isLoading}
                 reviewFocus={reviewFocus}
                 setReviewFocus={setReviewFocus}
+                persona={persona}
+                setPersona={setPersona}
               />
             </div>
             <div className="lg:col-span-1 min-h-0">

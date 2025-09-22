@@ -6,11 +6,10 @@ import remarkGfm from 'https://esm.sh/remark-gfm@4';
 import { Prism as SyntaxHighlighter } from 'https://esm.sh/react-syntax-highlighter@15.5.0';
 import { vscDarkPlus, vs } from 'https://esm.sh/react-syntax-highlighter@15.5.0/dist/esm/styles/prism';
 
-import type { Theme, ChatMessage } from '../App';
+import type { Theme, ChatMessage, ReviewFinding } from '../App';
 import { stripMarkdown } from '../utils/markdownStripper';
 import { XIcon } from './icons/XIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
-import { CheckIcon } from './icons/CheckIcon';
 import { FileTextIcon } from './icons/FileTextIcon';
 import { MarkdownIcon } from './icons/MarkdownIcon';
 import { PdfIcon } from './icons/PdfIcon';
@@ -44,10 +43,26 @@ const ExportModal: React.FC<ExportModalProps> = ({
 
   if (!isOpen) return null;
 
+  const generateMarkdownForFinding = (finding: ReviewFinding): string => {
+    let md = `### ${finding.title}\n\n`;
+    md += `**Severity:** ${finding.severity}  \n`;
+    md += `**Category:** ${finding.category}\n\n`;
+    md += `${finding.summary}\n\n`;
+    if (finding.suggestion) {
+        md += `**Suggestion:**\n`;
+        md += `*Before:*\n\`\`\`${language}\n${finding.suggestion.before}\n\`\`\`\n`;
+        md += `*After:*\n\`\`\`${language}\n${finding.suggestion.after}\n\`\`\`\n`;
+    }
+    if (finding.learnMoreUrl) {
+        md += `[Learn More](${finding.learnMoreUrl})\n`;
+    }
+    return md;
+  }
+
   const generateFileContent = (targetFormat: ExportFormat): string => {
-    let header = `Code Review\nLanguage: ${language}\nExported on: ${new Date().toLocaleString()}\n\n`;
+    let header = `# Code Review\n\n**Language:** ${language}\n\n**Exported on:** ${new Date().toLocaleString()}\n\n`;
     let fileContent = '';
-    const separator = targetFormat === 'md' ? '\n\n---\n\n' : '\n\n================================\n\n';
+    const separator = '\n\n---\n\n';
 
     if (includeCode) {
       const codeBlockFence = '```';
@@ -55,9 +70,15 @@ const ExportModal: React.FC<ExportModalProps> = ({
     }
 
     const chatContent = conversation.map(msg => {
-      const author = msg.role === 'user' ? 'You' : 'AI Reviewer';
-      const content = (targetFormat === 'txt') ? stripMarkdown(msg.content) : msg.content;
+      const author = msg.role === 'user' ? 'You' : 'AI Assistant';
       
+      if (Array.isArray(msg.content)) { // Structured review
+          const findingsMd = msg.content.map(generateMarkdownForFinding).join('\n\n');
+          return `## ${author}:\n\n${findingsMd}`;
+      }
+      
+      // Plain text chat message
+      const content = msg.content as string;
       if (targetFormat === 'md' && msg.role === 'user') {
         const quotedContent = content.split('\n').map(line => `> ${line}`).join('\n');
         return `**${author}:**\n\n${quotedContent}`;
@@ -187,8 +208,8 @@ const ExportModal: React.FC<ExportModalProps> = ({
               <h2>Conversation</h2>
               ${conversation.map(msg => `
                 <div class="message ${msg.role}">
-                  <strong>${msg.role === 'user' ? 'You' : 'AI Reviewer'}:</strong>
-                  <div>${msg.content.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</div>
+                  <strong>${msg.role === 'user' ? 'You' : 'AI Assistant'}:</strong>
+                  <div>${(Array.isArray(msg.content) ? 'Structured review content...' : msg.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</div>
                 </div>
               `).join('')}
             </body>
@@ -277,43 +298,23 @@ const ExportModal: React.FC<ExportModalProps> = ({
       <div className="absolute -z-10 -left-[9999px] -top-[9999px]">
         <div ref={pdfContentRef} className={`p-10 ${theme}`} style={{ width: '800px', fontFamily: 'Inter, sans-serif' }}>
             <div className={`${theme === 'dark' ? 'dark bg-ios-dark-panel text-white' : 'bg-white text-black'}`}>
-                <h1 className="text-3xl font-bold mb-2">Code Review</h1>
-                <p className="text-sm text-gray-500 mb-6">Exported on: {new Date().toLocaleString()}</p>
-                 {includeCode && (
-                    <div className="mb-8">
-                        <h2 className="text-xl font-semibold mb-2 pb-2 border-b">Original Code Snippet ({language})</h2>
-                        <SyntaxHighlighter language={language} style={theme === 'dark' ? vscDarkPlus : vs} customStyle={{ margin: 0, padding: '1rem', borderRadius: '0.5rem' }} codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }}>
-                          {code}
-                        </SyntaxHighlighter>
-                    </div>
-                )}
-                <h2 className="text-xl font-semibold mb-4 pb-2 border-b">Conversation</h2>
-                <div className="space-y-6">
-                    {conversation.map((msg, index) => (
-                      <div key={index}>
-                        <h3 className="font-bold text-lg mb-2">{msg.role === 'user' ? 'You' : 'AI Reviewer'}</h3>
-                        <div className={`p-4 rounded-lg ${msg.role === 'user' ? (theme === 'dark' ? 'bg-cyan-800' : 'bg-cyan-50') : (theme === 'dark' ? 'bg-ios-dark-header' : 'bg-ios-light-header')}`}>
-                           <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                components={{
-                                    code: ({node, inline, className, children, ...props}) => {
-                                        const match = /language-(\w+)/.exec(className || '');
-                                        return !inline && match ? (
-                                        <SyntaxHighlighter style={theme === 'dark' ? vscDarkPlus : vs} language={match[1]} PreTag="div" {...props}>
-                                            {String(children).replace(/\n$/, '')}
-                                        </SyntaxHighlighter>
-                                        ) : (
-                                        <code className="px-1 bg-black/10 dark:bg-white/10 rounded" {...props}>{children}</code>
-                                        );
-                                    },
-                                }}
-                            >
-                                {msg.content}
-                            </ReactMarkdown>
-                        </div>
-                      </div>
-                    ))}
-                </div>
+                <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                        code: ({node, inline, className, children, ...props}) => {
+                            const match = /language-(\w+)/.exec(className || '');
+                            return !inline && match ? (
+                            <SyntaxHighlighter style={theme === 'dark' ? vscDarkPlus : vs} language={match[1]} PreTag="div" {...props}>
+                                {String(children).replace(/\n$/, '')}
+                            </SyntaxHighlighter>
+                            ) : (
+                            <code className="px-1 bg-black/10 dark:bg-white/10 rounded" {...props}>{children}</code>
+                            );
+                        },
+                    }}
+                >
+                    {generateFileContent('md')}
+                </ReactMarkdown>
             </div>
         </div>
       </div>

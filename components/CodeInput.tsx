@@ -1,7 +1,9 @@
 import React, { useRef } from 'react';
 import { UploadIcon } from './icons/UploadIcon';
 import FocusSelector from './FocusSelector';
+import PersonaSelector from './PersonaSelector';
 import { REVIEW_FOCUS_AREAS } from '../constants';
+import type { AiAction } from '../App';
 
 interface Language {
   value: string;
@@ -14,10 +16,12 @@ interface CodeInputProps {
   language: string;
   setLanguage: (language: string) => void;
   languages: Language[];
-  onSubmit: () => void;
+  onAiAction: (action: AiAction) => void;
   isLoading: boolean;
   reviewFocus: string[];
   setReviewFocus: (focus: string[]) => void;
+  persona: string;
+  setPersona: (persona: string) => void;
 }
 
 const languageMap: Record<string, string> = {
@@ -46,10 +50,12 @@ const CodeInput: React.FC<CodeInputProps> = ({
   language,
   setLanguage,
   languages,
-  onSubmit,
+  onAiAction,
   isLoading,
   reviewFocus,
   setReviewFocus,
+  persona,
+  setPersona,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -123,19 +129,41 @@ const CodeInput: React.FC<CodeInputProps> = ({
           className="w-full h-full bg-transparent text-ios-light-text-secondary dark:text-gray-300 font-mono resize-none focus:outline-none p-4 text-sm leading-relaxed min-h-[300px] sm:min-h-[400px]"
         />
       </div>
-      <div className="p-4 border-t border-ios-light-header dark:border-ios-dark-header flex flex-col sm:flex-row items-center gap-4">
+      <div className="p-4 border-t border-ios-light-header dark:border-ios-dark-header flex flex-col sm:flex-row items-center gap-4 flex-wrap">
         <FocusSelector 
           options={REVIEW_FOCUS_AREAS}
           selectedOptions={reviewFocus}
           onChange={setReviewFocus}
         />
-        <button
-          onClick={onSubmit}
-          disabled={isLoading || !code.trim()}
-          className="w-full sm:w-auto bg-cyan-600 hover:bg-cyan-700 disabled:bg-ios-light-header dark:disabled:bg-ios-dark-header disabled:text-ios-light-text-secondary dark:disabled:text-ios-dark-secondary disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-full transition-colors duration-200 flex items-center justify-center text-base flex-grow"
-        >
-          {isLoading ? 'Analyzing...' : 'Review Code'}
-        </button>
+        <PersonaSelector
+          selectedPersona={persona}
+          onPersonaChange={setPersona}
+        />
+        <div className="w-full flex items-center gap-2">
+            <button
+              onClick={() => onAiAction('review')}
+              disabled={isLoading || !code.trim()}
+              className="flex-1 bg-cyan-600 hover:bg-cyan-700 disabled:bg-ios-light-header dark:disabled:bg-ios-dark-header disabled:text-ios-light-text-secondary dark:disabled:text-ios-dark-secondary disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-full transition-colors duration-200 flex items-center justify-center text-base"
+            >
+              {isLoading ? 'Analyzing...' : 'Review Code'}
+            </button>
+            <button
+              onClick={() => onAiAction('test')}
+              disabled={isLoading || !code.trim()}
+              className="px-4 py-3 bg-ios-light-header dark:bg-ios-dark-header hover:bg-ios-light-tertiary dark:hover:bg-ios-dark-tertiary text-ios-light-text-primary dark:text-white font-medium rounded-full transition-colors duration-200 disabled:opacity-50"
+              title="Generate Unit Tests"
+            >
+              Tests
+            </button>
+             <button
+              onClick={() => onAiAction('docs')}
+              disabled={isLoading || !code.trim()}
+              className="px-4 py-3 bg-ios-light-header dark:bg-ios-dark-header hover:bg-ios-light-tertiary dark:hover:bg-ios-dark-tertiary text-ios-light-text-primary dark:text-white font-medium rounded-full transition-colors duration-200 disabled:opacity-50"
+              title="Generate Documentation"
+            >
+              Docs
+            </button>
+        </div>
       </div>
     </div>
   );
