@@ -230,6 +230,10 @@ const App: React.FC = () => {
   const toggleSidebar = () => {
     setIsSidebarOpen(prev => !prev);
   }
+  
+  const selectedItem = reviewHistory.find(item => item.id === selectedHistoryId);
+  const currentCode = selectedItem ? selectedItem.code : code;
+  const currentLanguage = selectedItem ? selectedItem.language : language;
 
   return (
     <>
@@ -276,6 +280,8 @@ const App: React.FC = () => {
                 isChatting={isChatting}
                 error={error} 
                 theme={theme}
+                code={currentCode}
+                language={currentLanguage}
                 onSendMessage={handleSendMessage}
                 onApplyFix={handleApplyFix}
                 onPreviewFix={handlePreviewFix}

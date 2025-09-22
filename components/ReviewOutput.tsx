@@ -8,10 +8,10 @@ import type { Theme, ChatMessage } from '../App';
 import { parseReview } from '../utils/reviewParser';
 import type { ParsedSegment } from '../utils/reviewParser';
 import ChatInput from './ChatInput';
+import ExportModal from './ExportModal';
 import { ApplyIcon } from './icons/ApplyIcon';
 import { EyeIcon } from './icons/EyeIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
-import { stripMarkdown } from '../utils/markdownStripper';
 
 
 interface ReviewOutputProps {
@@ -20,6 +20,8 @@ interface ReviewOutputProps {
   isChatting: boolean;
   error: string | null;
   theme: Theme;
+  code: string;
+  language: string;
   onSendMessage: (message: string) => void;
   onApplyFix: (before: string, after: string) => void;
   onPreviewFix: (before: string, after: string, language: string) => void;
@@ -112,50 +114,8 @@ const ReviewMessage: React.FC<{ message: string; theme: Theme; onApplyFix: (befo
 };
 
 
-const ReviewOutput: React.FC<ReviewOutputProps> = ({ conversation, isLoading, isChatting, error, theme, onSendMessage, onApplyFix, onPreviewFix }) => {
-  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
-  const exportMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
-        setIsExportMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  const generateFileContent = (format: 'md' | 'txt'): string => {
-    return conversation.map(msg => {
-      const author = msg.role === 'user' ? 'You' : 'AI Reviewer';
-      const content = format === 'txt' ? stripMarkdown(msg.content) : msg.content;
-      
-      if (format === 'md' && msg.role === 'user') {
-        // Use blockquotes for user messages in markdown for clarity
-        const quotedContent = content.split('\n').map(line => `> ${line}`).join('\n');
-        return `**${author}:**\n\n${quotedContent}\n\n---\n\n`;
-      }
-
-      return `**${author}:**\n\n${content}\n\n---\n\n`;
-    }).join('');
-  };
-
-  const handleExport = (format: 'md' | 'txt') => {
-    const content = generateFileContent(format);
-    const blob = new Blob([content], { type: format === 'md' ? 'text/markdown' : 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `code-review-${new Date().toISOString().split('T')[0]}.${format}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    setIsExportMenuOpen(false); // Close menu after export
-  };
+const ReviewOutput: React.FC<ReviewOutputProps> = ({ conversation, isLoading, isChatting, error, theme, code, language, onSendMessage, onApplyFix, onPreviewFix }) => {
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const renderContent = () => {
     if (isLoading) {
@@ -215,52 +175,36 @@ const ReviewOutput: React.FC<ReviewOutputProps> = ({ conversation, isLoading, is
   };
 
   return (
-    <div className="bg-ios-light-panel dark:bg-ios-dark-panel rounded-2xl shadow-lg h-full flex flex-col border border-ios-light-tertiary dark:border-ios-dark-tertiary/50">
-      <div className="p-4 border-b border-ios-light-header dark:border-ios-dark-header sticky top-0 bg-ios-light-panel/80 dark:bg-ios-dark-panel/80 backdrop-blur-md z-10 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-ios-light-text-primary dark:text-white">Code Review</h2>
-         {(conversation.length > 0 && !isLoading) && (
-          <div className="relative" ref={exportMenuRef}>
+    <>
+      <div className="bg-ios-light-panel dark:bg-ios-dark-panel rounded-2xl shadow-lg h-full flex flex-col border border-ios-light-tertiary dark:border-ios-dark-tertiary/50">
+        <div className="p-4 border-b border-ios-light-header dark:border-ios-dark-header sticky top-0 bg-ios-light-panel/80 dark:bg-ios-dark-panel/80 backdrop-blur-md z-10 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-ios-light-text-primary dark:text-white">Code Review</h2>
+           {(conversation.length > 0 && !isLoading) && (
             <button
-              onClick={() => setIsExportMenuOpen(prev => !prev)}
+              onClick={() => setIsExportModalOpen(true)}
               className="p-2 rounded-full hover:bg-ios-light-header dark:hover:bg-ios-dark-header text-ios-light-text-secondary dark:text-ios-dark-secondary"
               aria-label="Export review"
-              aria-haspopup="true"
-              aria-expanded={isExportMenuOpen}
             >
               <DownloadIcon className="h-5 w-5" />
             </button>
-            {isExportMenuOpen && (
-              <div className="absolute top-full right-0 mt-2 w-56 bg-ios-light-panel dark:bg-ios-dark-header border border-ios-light-tertiary dark:border-ios-dark-tertiary/50 rounded-xl shadow-lg z-20 animate-fade-in py-1.5" style={{ animationDuration: '0.15s' }}>
-                <ul>
-                  <li>
-                    <button
-                      onClick={() => handleExport('md')}
-                      className="w-full text-left px-4 py-2 text-sm text-ios-light-text-primary dark:text-white hover:bg-ios-light-header/80 dark:hover:bg-ios-dark-panel"
-                    >
-                      Export as Markdown (.md)
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      onClick={() => handleExport('txt')}
-                      className="w-full text-left px-4 py-2 text-sm text-ios-light-text-primary dark:text-white hover:bg-ios-light-header/80 dark:hover:bg-ios-dark-panel"
-                    >
-                      Export as Text (.txt)
-                    </button>
-                  </li>
-                </ul>
-              </div>
-            )}
-          </div>
+          )}
+        </div>
+        <div className="flex-grow p-6 overflow-y-auto">
+          {renderContent()}
+        </div>
+        {(conversation.length > 0 && !isLoading) && (
+          <ChatInput onSendMessage={onSendMessage} isSending={isChatting} />
         )}
       </div>
-      <div className="flex-grow p-6 overflow-y-auto">
-        {renderContent()}
-      </div>
-      {(conversation.length > 0 && !isLoading) && (
-        <ChatInput onSendMessage={onSendMessage} isSending={isChatting} />
-      )}
-    </div>
+      <ExportModal 
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        conversation={conversation}
+        code={code}
+        language={language}
+        theme={theme}
+      />
+    </>
   );
 };
 
