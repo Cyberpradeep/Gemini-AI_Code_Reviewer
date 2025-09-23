@@ -1,31 +1,25 @@
+
 import { GoogleGenAI, Content } from "@google/genai";
 import { REVIEW_FOCUS_AREAS } from '../constants';
 import type { ReviewFinding, ProjectFile } from '../App';
 
-let aiPromise: Promise<GoogleGenAI> | null = null;
+let ai: GoogleGenAI | null = null;
 
-const getAiClient = (): Promise<GoogleGenAI> => {
-  if (!aiPromise) {
-    aiPromise = (async () => {
-      try {
-        const response = await fetch('/api/get-key');
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response from API key endpoint.' }));
-          throw new Error(errorData.error || `Failed to fetch API key. Status: ${response.status}`);
-        }
-        const { apiKey } = await response.json();
-        if (!apiKey) {
-          throw new Error('API key not found in server response. Ensure it is set in Vercel environment variables.');
-        }
-        return new GoogleGenAI({ apiKey });
-      } catch (error) {
-        console.error("Fatal error during AI client initialization:", error);
-        aiPromise = null; // Reset promise on failure to allow potential future retries
-        throw new Error("Could not initialize the AI service. Please verify the API Key is configured correctly in the project's deployment settings.");
-      }
-    })();
+const getAiClient = (): GoogleGenAI => {
+  if (!ai) {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      console.error("API_KEY environment variable not found.");
+      throw new Error("Could not initialize the AI service. Please verify the API Key is configured correctly in the project's deployment settings.");
+    }
+    try {
+      ai = new GoogleGenAI({ apiKey });
+    } catch (error) {
+      console.error("Fatal error during AI client initialization:", error);
+      throw new Error("Could not initialize the AI service. An issue occurred during initialization.");
+    }
   }
-  return aiPromise;
+  return ai;
 };
 
 
@@ -84,7 +78,7 @@ export const performCodeReview = async (
   onChunkReceived: (finding: ReviewFinding) => void,
 ): Promise<{ userPrompt: string; }> => {
   try {
-    const aiClient = await getAiClient();
+    const aiClient = getAiClient();
     const userPrompt = generateStreamReviewPrompt(files, focusAreas);
 
     const resultStream = await aiClient.models.generateContentStream({
@@ -194,7 +188,7 @@ const generateAiAction = async (
   action: 'test' | 'docs'
 ): Promise<{ response: string; userPrompt: string; }> => {
   try {
-    const aiClient = await getAiClient();
+    const aiClient = getAiClient();
     const userPrompt = generateActionPrompt(code, language, projectFiles, targetFilePath, action);
 
     const result = await aiClient.models.generateContent({
@@ -225,7 +219,7 @@ export const sendFollowUpMessage = async (
   history: Content[],
 ): Promise<{ response: string; updatedHistory: Content[] }> => {
   try {
-    const aiClient = await getAiClient();
+    const aiClient = getAiClient();
     const chat = aiClient.chats.create({
       model: 'gemini-2.5-flash',
       history,

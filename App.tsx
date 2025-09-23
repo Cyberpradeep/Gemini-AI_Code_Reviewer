@@ -375,7 +375,7 @@ const App: React.FC = () => {
          onToggleTheme={toggleTheme}
        />
       <div className="flex-1 flex flex-col min-w-0">
-        <main className="flex-1 p-3 lg:p-4 grid grid-cols-1 lg:grid-cols-2 gap-4 overflow-y-auto lg:overflow-hidden">
+        <main className="flex-1 p-3 lg:p-4 grid grid-cols-1 lg:grid-cols-2 gap-4 overflow-y-auto lg:overflow-hidden min-h-0">
           <CodeInput
             inputMode={inputMode}
             code={code}

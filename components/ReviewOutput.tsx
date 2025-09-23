@@ -289,7 +289,7 @@ const ReviewOutput: React.FC<ReviewOutputProps> = ({ conversation, isLoading, is
             </button>
           )}
         </div>
-        <div className="flex-grow p-4 overflow-y-auto">
+        <div className="flex-grow p-4 overflow-y-auto min-h-0">
           {renderContent()}
         </div>
         {(conversation.length > 0 && !isLoading) && (

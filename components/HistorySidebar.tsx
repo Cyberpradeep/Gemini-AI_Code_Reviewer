@@ -72,7 +72,7 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({
             </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5 min-h-0">
           {history.length > 0 && (
              <div className="px-2 pt-4 pb-1">
                 <p className="text-xs font-semibold text-light-label-secondary dark:text-dark-label-secondary uppercase">Recent</p>
