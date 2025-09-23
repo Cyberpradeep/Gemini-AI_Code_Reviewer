@@ -1,25 +1,32 @@
+
 import { GoogleGenAI, Content } from "@google/genai";
 import { REVIEW_FOCUS_AREAS, SUPPORTED_LANGUAGES } from '../constants';
 import type { ReviewFinding, ProjectFile } from '../App';
 
-// Singleton pattern to hold the initialized AI client.
-let ai: GoogleGenAI | null = null;
-
-const getAiClient = (): GoogleGenAI => {
-    if (ai) {
-        return ai;
-    }
-    
-    const apiKey = process.env.API_KEY;
-
-    if (!apiKey) {
+// This function initializes the AI client directly using the API key from environment variables.
+// It includes a check to provide a clear error message if the key is missing,
+// which is common in browser environments without a specific build step to inject the variable.
+const initializeAiClient = (): GoogleGenAI => {
+    // This check is crucial for browser environments where 'process' is not defined.
+    if (typeof process === 'undefined' || !process.env || !process.env.API_KEY) {
         console.error("API_KEY environment variable not found.");
+        // This specific error message will be shown to the user.
         throw new Error("Could not initialize the AI service. Please verify the API Key is configured correctly in the project's deployment settings.");
     }
-    
-    ai = new GoogleGenAI({ apiKey });
-    return ai;
+
+    try {
+        // Initialize the client as per the guidelines.
+        return new GoogleGenAI({ apiKey: process.env.API_KEY });
+    } catch (error) {
+        console.error("Error initializing GoogleGenAI:", error);
+        const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+        throw new Error(`Could not initialize the AI service: ${message}`);
+    }
 };
+
+// Initialize the client once at the module level.
+// If initialization fails, it will throw an error immediately, preventing the app from running in a broken state.
+const ai = initializeAiClient();
 
 
 const formatProjectFiles = (files: ProjectFile[]): string => {
@@ -79,10 +86,9 @@ export const performCodeReview = async (
   onChunkReceived: (finding: ReviewFinding) => void,
 ): Promise<{ userPrompt: string; }> => {
   try {
-    const localAi = getAiClient();
     const userPrompt = generateStreamReviewPrompt(files, focusAreas);
 
-    const resultStream = await localAi.models.generateContentStream({
+    const resultStream = await ai.models.generateContentStream({
         model: 'gemini-2.5-flash',
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         config: {
@@ -150,8 +156,7 @@ export const sendFollowUpMessage = async (
   history: Content[],
 ): Promise<{ response: string; updatedHistory: Content[] }> => {
   try {
-    const localAi = getAiClient();
-    const chat = localAi.chats.create({
+    const chat = ai.chats.create({
       model: 'gemini-2.5-flash',
       history,
       config: {
@@ -177,7 +182,6 @@ export const detectLanguage = async (codeSnippet: string): Promise<string | null
         return null; // Not enough code to detect
     }
     try {
-        const localAi = getAiClient();
         const supportedLanguageValues = SUPPORTED_LANGUAGES.map(l => l.value).join(', ');
 
         const prompt = `Analyze the following code snippet and identify the programming language.
@@ -189,7 +193,7 @@ Code:
 ${codeSnippet.substring(0, 2000)}
 ---`;
 
-        const result = await localAi.models.generateContent({
+        const result = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
