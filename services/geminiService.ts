@@ -13,16 +13,31 @@ const getAiClient = async (): Promise<GoogleGenAI> => {
 
     try {
         const response = await fetch('/api/get-key');
+        
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const serverMessage = errorData.error || `Server responded with status ${response.status}`;
-            console.error("Error fetching API key:", serverMessage);
-            throw new Error(`Could not initialize the AI service. Please verify the API Key is configured correctly in the project's deployment settings.`);
+            let serverMessage = `Server responded with status ${response.status}`;
+            try {
+                // Try to parse a JSON error response from our API function
+                const errorData = await response.json();
+                serverMessage = errorData.error || serverMessage;
+            } catch (e) {
+                // If parsing fails, the response might be plain text or something else
+                console.warn("Could not parse error response as JSON.");
+            }
+            
+            console.error("Failed to fetch API key from the backend function.", {
+                status: response.status,
+                statusText: response.statusText,
+                message: serverMessage
+            });
+
+            // Provide a more specific, user-facing error message.
+            throw new Error(`The application's backend function failed to provide an API key. Please check the Vercel deployment logs for the '/api/get-key' function and ensure the API_KEY environment variable is set correctly in your project settings.`);
         }
 
         const { apiKey } = await response.json();
         if (!apiKey) {
-            throw new Error("Could not initialize the AI service. API key was not returned from the server.");
+            throw new Error("Could not initialize the AI service. The backend function returned successfully but did not provide an API key.");
         }
         
         const newAiInstance = new GoogleGenAI({ apiKey });
@@ -30,8 +45,9 @@ const getAiClient = async (): Promise<GoogleGenAI> => {
         return ai;
 
     } catch (error) {
-        console.error("Error initializing AI client:", error);
-        const message = error instanceof Error ? error.message : 'An unknown error occurred while fetching credentials.';
+        console.error("Fatal error during AI client initialization:", error);
+        // Re-throw the error to be caught by the calling function's UI
+        const message = error instanceof Error ? error.message : 'An unknown error occurred while setting up the AI service.';
         throw new Error(message);
     }
 };
@@ -224,6 +240,10 @@ ${codeSnippet.substring(0, 2000)}
 
     } catch (error) {
         console.error("Error in detectLanguage:", error);
+        // We can re-throw the specific initialization error to the user
+        if (error instanceof Error && error.message.includes("backend function failed")) {
+            throw error;
+        }
         return null;
     }
 };
