@@ -179,6 +179,13 @@ const App: React.FC = () => {
       if (collectedFindings.length > 0) {
         const finalConversation: ChatMessage[] = [{ role: 'model', content: collectedFindings, prompt: userPromptForHistory }];
         saveToHistory(finalConversation, filesToReview);
+        
+        // Set the initial history for follow-up chat
+        const initialChatHistory: Content[] = [
+            { role: 'user', parts: [{ text: userPromptForHistory }] },
+            { role: 'model', parts: [{ text: JSON.stringify(collectedFindings) }] }
+        ];
+        setChatHistory(initialChatHistory);
       }
     }
   }, [inputMode, code, projectFiles, language, focusAreas, persona, saveToHistory]);
@@ -186,7 +193,6 @@ const App: React.FC = () => {
   const handleSendMessage = useCallback(async (message: string) => {
     if (!message.trim()) return;
 
-    // FIX: Explicitly create message objects to ensure correct typing and prevent type widening on the 'role' property.
     const userMessage: ChatMessage = { role: 'user', content: message };
     const newConversation = [...conversation, userMessage];
     setConversation(newConversation);
@@ -195,7 +201,31 @@ const App: React.FC = () => {
     
     try {
       const { response, updatedHistory } = await sendFollowUpMessage(message, chatHistory);
-      const modelMessage: ChatMessage = { role: 'model', content: response };
+
+      let finalContent: string | ReviewFinding[];
+      try {
+        // Attempt to parse the response. The AI might still occasionally return a JSON
+        // object or array of objects matching the ReviewFinding structure.
+        const parsed = JSON.parse(response);
+
+        // Check if it's a single finding object or an array of them.
+        const isFinding = (obj: any) => obj && obj.category && obj.severity && obj.title;
+        const isFindingArray = Array.isArray(parsed) && parsed.every(isFinding);
+        
+        if (isFinding(parsed)) {
+            finalContent = [parsed];
+        } else if (isFindingArray) {
+            finalContent = parsed;
+        } else {
+            // It's valid JSON, but not what we expect for a finding. Treat as text.
+            finalContent = response;
+        }
+      } catch (e) {
+        // Not a JSON object, so it's a regular markdown/text string.
+        finalContent = response;
+      }
+
+      const modelMessage: ChatMessage = { role: 'model', content: finalContent };
       const finalConversation = [...newConversation, modelMessage];
       setConversation(finalConversation);
       setChatHistory(updatedHistory);
@@ -328,6 +358,25 @@ const App: React.FC = () => {
     setCurrentHistoryId(item.id);
     setError(null);
     
+    // Rebuild chat history for conversational memory
+    const newChatHistory: Content[] = [];
+    const firstMessage = item.conversation[0];
+
+    // Handle the initial review context
+    if (firstMessage?.prompt && firstMessage.role === 'model') {
+        newChatHistory.push({ role: 'user', parts: [{ text: firstMessage.prompt }] });
+        newChatHistory.push({ role: 'model', parts: [{ text: JSON.stringify(firstMessage.content) }] });
+    }
+
+    // Handle subsequent follow-up messages
+    for (let i = 1; i < item.conversation.length; i++) {
+        const message = item.conversation[i];
+        // Follow-up messages have string content
+        const contentText = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
+        newChatHistory.push({ role: message.role, parts: [{ text: contentText }] });
+    }
+    setChatHistory(newChatHistory);
+
     if (item.inputMode === 'project') {
         setActiveFilePath(item.projectFiles[0]?.path || null);
         setCode('');
@@ -374,42 +423,45 @@ const App: React.FC = () => {
          theme={theme}
          onToggleTheme={toggleTheme}
        />
-      <div className="flex-1 flex flex-col min-w-0">
-        <main className="flex-1 p-3 lg:p-4 grid grid-cols-1 lg:grid-cols-2 gap-4 overflow-y-auto lg:overflow-hidden min-h-0">
-          <CodeInput
-            inputMode={inputMode}
-            code={code}
-            onCodeChange={setCode}
-            projectFiles={projectFiles}
-            activeFile={activeFileInProject}
-            onFileSelect={setActiveFilePath}
-            onFileContentChange={handleFileContentChange}
-            language={language}
-            onLanguageChange={setLanguage}
-            focusAreas={focusAreas}
-            onFocusAreaChange={setFocusAreas}
-            persona={persona}
-            onPersonaChange={setPersona}
-            onReview={handleReview}
-            onGenerate={handleGenerateAction}
-            isLoading={isLoading}
-            onProjectImport={handleProjectImport}
-            onMenuClick={() => setIsSidebarOpen(true)}
-            onNewReview={startNewReview}
-          />
-
-          <ReviewOutput
-            conversation={conversation}
-            isLoading={isLoading}
-            isChatting={isChatting}
-            error={error}
-            theme={theme}
-            language={language}
-            onSendMessage={handleSendMessage}
-            onApplyFix={handleApplyFix}
-            onPreviewFix={handlePreviewFix}
-            projectFiles={projectFiles}
-          />
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <main className="flex-1 p-3 lg:p-4 flex flex-col lg:flex-row gap-4 min-h-0">
+          <div className="flex-1 min-w-0 min-h-0">
+            <CodeInput
+              inputMode={inputMode}
+              code={code}
+              onCodeChange={setCode}
+              projectFiles={projectFiles}
+              activeFile={activeFileInProject}
+              onFileSelect={setActiveFilePath}
+              onFileContentChange={handleFileContentChange}
+              language={language}
+              onLanguageChange={setLanguage}
+              focusAreas={focusAreas}
+              onFocusAreaChange={setFocusAreas}
+              persona={persona}
+              onPersonaChange={setPersona}
+              onReview={handleReview}
+              onGenerate={handleGenerateAction}
+              isLoading={isLoading}
+              onProjectImport={handleProjectImport}
+              onMenuClick={() => setIsSidebarOpen(true)}
+              onNewReview={startNewReview}
+            />
+          </div>
+          <div className="flex-1 min-w-0 min-h-0">
+            <ReviewOutput
+              conversation={conversation}
+              isLoading={isLoading}
+              isChatting={isChatting}
+              error={error}
+              theme={theme}
+              language={language}
+              onSendMessage={handleSendMessage}
+              onApplyFix={handleApplyFix}
+              onPreviewFix={handlePreviewFix}
+              projectFiles={projectFiles}
+            />
+          </div>
         </main>
       </div>
 

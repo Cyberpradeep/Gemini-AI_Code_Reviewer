@@ -1,25 +1,50 @@
-
 import { GoogleGenAI, Content } from "@google/genai";
 import { REVIEW_FOCUS_AREAS } from '../constants';
 import type { ReviewFinding, ProjectFile } from '../App';
 
+// Singleton pattern to hold the initialized AI client and the API key fetching promise
 let ai: GoogleGenAI | null = null;
+let apiKeyPromise: Promise<string> | null = null;
 
-const getAiClient = (): GoogleGenAI => {
-  if (!ai) {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      console.error("API_KEY environment variable not found.");
-      throw new Error("Could not initialize the AI service. Please verify the API Key is configured correctly in the project's deployment settings.");
-    }
+const fetchApiKey = async (): Promise<string> => {
     try {
-      ai = new GoogleGenAI({ apiKey });
-    } catch (error) {
-      console.error("Fatal error during AI client initialization:", error);
-      throw new Error("Could not initialize the AI service. An issue occurred during initialization.");
+        const response = await fetch('/api/get-key');
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({})); // try to parse error
+            const errorMessage = errorData.error || `Failed to fetch API key from server (status: ${response.status}).`;
+            console.error("API Key fetch failed:", errorMessage);
+            throw new Error(errorMessage);
+        }
+        const { apiKey } = await response.json();
+        if (!apiKey) {
+            throw new Error("API key is missing in the server's response.");
+        }
+        return apiKey;
+    } catch (err) {
+        console.error("Fatal error during API key fetch:", err);
+        // Re-throw a more user-friendly error for the UI.
+        throw new Error("Could not get API Key from server. Please ensure it is configured in your project's deployment settings.");
     }
-  }
-  return ai;
+};
+
+const getAiClient = async (): Promise<GoogleGenAI> => {
+    if (ai) {
+        return ai;
+    }
+    
+    if (!apiKeyPromise) {
+        apiKeyPromise = fetchApiKey();
+    }
+
+    try {
+        const apiKey = await apiKeyPromise;
+        ai = new GoogleGenAI({ apiKey });
+        return ai;
+    } catch (error) {
+        apiKeyPromise = null; // Reset promise on failure to allow retries
+        console.error("Fatal error during AI client initialization:", error);
+        throw error; // Propagate the user-friendly error
+    }
 };
 
 
@@ -45,16 +70,18 @@ const generateStreamReviewPrompt = (files: ProjectFile[], focusAreas: string[]):
 ${focusPrompt}
 
 **CRITICAL INSTRUCTIONS:**
-1.  **JSON ONLY:** Your entire output MUST be a stream of valid JSON objects. Nothing else. No conversational text, no introductions, no summaries, no markdown formatting like \`\`\`json.
-2.  **ONE OBJECT PER LINE:** Each JSON object must be a single, minified line of text, separated by a newline.
-3.  **IMMEDIATE STREAMING:** Begin streaming the JSON objects immediately without any preamble.
-4.  **SCHEMA ADHERENCE:** Every JSON object MUST strictly conform to this exact TypeScript interface:
+1.  **START WITH AN OVERVIEW:** Your very first JSON object MUST be a "Code Overview". It should have \`severity: "Info"\`, \`category: "Best Practices & Readability"\`, and a \`title\` of "Code Purpose & Overview". In its \`summary\`, provide a high-level explanation of what the code does.
+2.  **EXPLAIN FINDINGS CLEARLY:** For each subsequent finding, the \`summary\` field must clearly explain the issue, why it's a problem, and how the suggested solution fixes it. Maintain a helpful and clear tone.
+3.  **JSON ONLY:** Your entire output MUST be a stream of valid JSON objects. Nothing else. No conversational text, no introductions, no summaries outside of the JSON structure.
+4.  **ONE OBJECT PER LINE:** Each JSON object must be a single, minified line of text, separated by a newline.
+5.  **IMMEDIATE STREAMING:** Begin streaming the JSON objects immediately without any preamble.
+6.  **SCHEMA ADHERENCE:** Every JSON object MUST strictly conform to this exact TypeScript interface:
     \`\`\`typescript
     interface ReviewFinding {
       category: "${REVIEW_FOCUS_AREAS.join('" | "')}";
       severity: "Critical" | "High" | "Medium" | "Low" | "Info";
       title: string;
-      summary: string; // Markdown format is allowed here
+      summary: string; // Markdown format is allowed here. This is where you explain the issue.
       filePath: string;
       suggestion?: {
         before: string;
@@ -64,7 +91,7 @@ ${focusPrompt}
     }
     \`\`\`
 
-Now, review the following ${reviewSubject}.
+Now, review the following ${reviewSubject}, following all instructions above.
 
 ${fileHeader}
 ${formatProjectFiles(files)}
@@ -78,10 +105,10 @@ export const performCodeReview = async (
   onChunkReceived: (finding: ReviewFinding) => void,
 ): Promise<{ userPrompt: string; }> => {
   try {
-    const aiClient = getAiClient();
+    const localAi = await getAiClient();
     const userPrompt = generateStreamReviewPrompt(files, focusAreas);
 
-    const resultStream = await aiClient.models.generateContentStream({
+    const resultStream = await localAi.models.generateContentStream({
         model: 'gemini-2.5-flash',
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         config: {
@@ -162,10 +189,10 @@ const generateActionPrompt = (
 
     if (action === 'test') {
         const framework = (language === 'javascript' || language === 'typescript') ? 'Jest' : 'a suitable standard testing framework for the language';
-        task = `Generate a complete unit test suite for the file \`${targetFilePath}\` using ${framework}. The tests should cover the main functionality, edge cases, and potential error conditions. The response should be a single markdown code block containing the test code.`;
+        task = `Generate a complete unit test suite for the file \`${targetFilePath}\` using ${framework}. The tests should cover the main functionality, edge cases, and potential error conditions. The response must be ONLY the code, inside a single markdown code block. Do not add any explanation or introductory text.`;
     } else { // docs
         const format = (language === 'javascript' || language === 'typescript') ? 'JSDoc' : 'the standard documentation format for the language (e.g., Python Docstrings)';
-        task = `Generate comprehensive documentation for the file \`${targetFilePath}\`. Use the ${format} format. The response should be a single markdown code block containing only the documented code.`;
+        task = `Generate comprehensive documentation for the file \`${targetFilePath}\`. Use the ${format} format. The response must be ONLY the documented code, inside a single markdown code block. Do not add any explanation or introductory text.`;
     }
 
     return `${task}
@@ -188,10 +215,10 @@ const generateAiAction = async (
   action: 'test' | 'docs'
 ): Promise<{ response: string; userPrompt: string; }> => {
   try {
-    const aiClient = getAiClient();
+    const localAi = await getAiClient();
     const userPrompt = generateActionPrompt(code, language, projectFiles, targetFilePath, action);
 
-    const result = await aiClient.models.generateContent({
+    const result = await localAi.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         config: {
@@ -219,10 +246,13 @@ export const sendFollowUpMessage = async (
   history: Content[],
 ): Promise<{ response: string; updatedHistory: Content[] }> => {
   try {
-    const aiClient = getAiClient();
-    const chat = aiClient.chats.create({
+    const localAi = await getAiClient();
+    const chat = localAi.chats.create({
       model: 'gemini-2.5-flash',
       history,
+      config: {
+        systemInstruction: "You are a helpful AI code review assistant. The user has already received an initial code review. Your task is now to answer follow-up questions conversationally. Your responses should be in clear, formatted Markdown. Do NOT output JSON.",
+      },
     });
 
     const result = await chat.sendMessage({ message });

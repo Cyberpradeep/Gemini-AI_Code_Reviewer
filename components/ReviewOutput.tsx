@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Spinner from './Spinner';
 import ReactMarkdown from 'https://esm.sh/react-markdown@9';
@@ -44,18 +45,23 @@ const SuggestionBlock: React.FC<{
   onApplyFix: (before: string, after: string) => void;
   onPreviewFix: (before: string, after: string, language: string) => void;
   syntaxTheme: any;
-}> = ({ suggestion, language, theme, onApplyFix, onPreviewFix, syntaxTheme }) => (
+}> = ({ suggestion, language, theme, onApplyFix, onPreviewFix, syntaxTheme }) => {
+  const lineNumberStyle = theme === 'light'
+    ? { color: 'rgba(0, 0, 0, 0.5)', minWidth: '2.25em' }
+    : { opacity: 0.6, minWidth: '2.25em' };
+
+  return (
   <div className="my-4 space-y-4">
     <div>
       <p className="text-xs font-medium text-red-700 dark:text-red-400 mb-1.5">BEFORE</p>
-      <div className="relative group rounded-lg overflow-hidden bg-red-100 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+      <div className="relative group rounded-lg overflow-x-auto bg-red-100 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
         <SyntaxHighlighter
           language={language}
           style={syntaxTheme}
           customStyle={{ margin: 0, padding: '0.75rem', backgroundColor: 'transparent', fontSize: '0.8125rem' }}
           codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }}
           showLineNumbers={true}
-          lineNumberStyle={{ opacity: 0.6, minWidth: '2.25em' }}
+          lineNumberStyle={lineNumberStyle}
         >
           {suggestion.before || ''}
         </SyntaxHighlighter>
@@ -82,14 +88,14 @@ const SuggestionBlock: React.FC<{
           </button>
         </div>
       </div>
-      <div className="relative group rounded-lg overflow-hidden bg-green-100 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20">
+      <div className="relative group rounded-lg overflow-x-auto bg-green-100 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20">
         <SyntaxHighlighter
           language={language}
           style={syntaxTheme}
           customStyle={{ margin: 0, padding: '0.75rem', backgroundColor: 'transparent', fontSize: '0.8125rem' }}
           codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }}
           showLineNumbers={true}
-          lineNumberStyle={{ opacity: 0.6, minWidth: '2.25em' }}
+          lineNumberStyle={lineNumberStyle}
         >
           {suggestion.after || ''}
         </SyntaxHighlighter>
@@ -99,7 +105,7 @@ const SuggestionBlock: React.FC<{
       </div>
     </div>
   </div>
-);
+)};
 
 const MarkdownContent: React.FC<{ content: string; theme: Theme }> = ({ content, theme }) => {
     const syntaxTheme = theme === 'dark' ? vscDarkPlus : vs;
@@ -119,7 +125,7 @@ const MarkdownContent: React.FC<{ content: string; theme: Theme }> = ({ content,
                     if (!inline && match) {
                         const codeString = String(children).replace(/\n$/, '');
                         return (
-                            <div className="relative group my-4 rounded-lg overflow-hidden" style={{backgroundColor: codeBgColor}}>
+                            <div className="relative group my-4 rounded-lg overflow-x-auto" style={{backgroundColor: codeBgColor}}>
                                 <SyntaxHighlighter style={syntaxTheme} language={match[1]} PreTag="div" customStyle={{ padding: '0.75rem', backgroundColor: 'transparent', fontSize: '0.8125rem' }} codeTagProps={{ style: { fontFamily: 'Fira Code, monospace' } }} {...props} showLineNumbers lineNumberStyle={{opacity: 0.6, minWidth: '2.25em'}}>
                                     {codeString}
                                 </SyntaxHighlighter>
@@ -173,6 +179,7 @@ const ReviewOutput: React.FC<ReviewOutputProps> = ({ conversation, isLoading, is
   const renderContent = () => {
     const firstMessageContent = conversation[0]?.content;
     const hasContent = conversation.length > 0 && Array.isArray(firstMessageContent) && firstMessageContent.length > 0;
+    const isReviewComplete = !isLoading && !isChatting && hasContent;
 
     if (isLoading && !hasContent) {
       return (
@@ -225,7 +232,7 @@ const ReviewOutput: React.FC<ReviewOutputProps> = ({ conversation, isLoading, is
                         </div>
                         <h3 className="text-base font-semibold mb-1 text-light-label-primary dark:text-dark-label-primary">{finding.title}</h3>
                         {finding.filePath && <p className="text-xs font-mono text-light-accent dark:text-dark-accent mb-2 truncate">{finding.filePath}</p>}
-                        <div className="text-sm text-light-label-secondary dark:text-dark-label-secondary prose prose-sm dark:prose-invert max-w-none">
+                        <div className="text-sm text-light-label-primary dark:text-dark-label-secondary prose prose-sm dark:prose-invert max-w-none">
                             <MarkdownContent content={finding.summary} theme={theme} />
                         </div>
                         {finding.suggestion && (
@@ -267,6 +274,13 @@ const ReviewOutput: React.FC<ReviewOutputProps> = ({ conversation, isLoading, is
             <div className="flex justify-start">
                 <div className="p-3.5 rounded-2xl bg-light-fill-primary dark:bg-dark-fill-primary">
                     <Spinner className="h-6 w-6" />
+                </div>
+            </div>
+        )}
+        {isReviewComplete && (
+            <div className="flex justify-start animate-fade-in mt-4">
+                <div className="max-w-[90%] lg:max-w-[85%] p-4 rounded-2xl bg-light-fill-primary dark:bg-dark-fill-primary text-light-label-primary dark:text-dark-label-primary animate-slide-up-fade">
+                    <p className="text-sm">This covers the main points of the review. Let me know if you have any questions or want to explore any of these suggestions further!</p>
                 </div>
             </div>
         )}
