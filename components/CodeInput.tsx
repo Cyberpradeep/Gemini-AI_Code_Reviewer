@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { ProjectFile, InputMode } from '../App';
 import { SUPPORTED_LANGUAGES, REVIEW_FOCUS_AREAS } from '../constants';
-import LanguageSelector from './LanguageSelector';
+import LanguageDisplay from './LanguageDisplay';
 import FocusSelector from './FocusSelector';
 import PersonaSelector from './PersonaSelector';
 import ProjectImportModal from './ProjectImportModal';
@@ -22,13 +22,11 @@ interface CodeInputProps {
   onFileSelect: (path: string) => void;
   onFileContentChange: (path: string, newContent: string) => void;
   language: string;
-  onLanguageChange: (lang: string) => void;
   focusAreas: string[];
   onFocusAreaChange: (areas: string[]) => void;
   persona: string;
   onPersonaChange: (persona: string) => void;
   onReview: () => void;
-  onGenerate: (action: 'test' | 'docs') => void;
   isLoading: boolean;
   onProjectImport: (files: ProjectFile[]) => void;
   onMenuClick: () => void;
@@ -38,18 +36,6 @@ interface CodeInputProps {
 const PlayIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
         <polygon points="5 3 19 12 5 21 5 3" />
-    </svg>
-);
-const TestTubeIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-        <path d="M14.5 2H9.5a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h5a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z" />
-        <path d="M8 2v2" /><path d="M16 2v2" /><path d="M12 11h.01" />
-    </svg>
-);
-const DocsIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-        <polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
     </svg>
 );
 
@@ -62,13 +48,11 @@ const CodeInput: React.FC<CodeInputProps> = ({
   onFileSelect,
   onFileContentChange,
   language,
-  onLanguageChange,
   focusAreas,
   onFocusAreaChange,
   persona,
   onPersonaChange,
   onReview,
-  onGenerate,
   isLoading,
   onProjectImport,
   onMenuClick,
@@ -97,10 +81,7 @@ const CodeInput: React.FC<CodeInputProps> = ({
         const content = e.target?.result as string;
         onNewReview(); // Resets to snippet mode
         onCodeChange(content);
-        // Auto-detect language
-        const extension = file.name.split('.').pop() || '';
-        const detectedLang = SUPPORTED_LANGUAGES.find(lang => lang.extensions.includes(extension));
-        if (detectedLang) onLanguageChange(detectedLang.value);
+        // Language will be auto-detected by App.tsx effect
       };
       reader.readAsText(file);
     }
@@ -108,7 +89,6 @@ const CodeInput: React.FC<CodeInputProps> = ({
   };
   
   const canRunActions = inputMode === 'snippet' ? code.trim().length > 0 : projectFiles.length > 0;
-  const canRunFileActions = inputMode === 'snippet' ? code.trim().length > 0 : !!activeFile;
 
   return (
     <>
@@ -202,10 +182,7 @@ const CodeInput: React.FC<CodeInputProps> = ({
 
         <footer className="p-3 border-t border-light-separator dark:border-dark-separator flex flex-col sm:flex-row items-center justify-between gap-3 flex-wrap">
           <div className="flex gap-2 flex-wrap justify-center">
-            <LanguageSelector
-                selectedLanguage={language}
-                onLanguageChange={onLanguageChange}
-            />
+            <LanguageDisplay language={language} />
              <FocusSelector
               options={REVIEW_FOCUS_AREAS}
               selectedOptions={focusAreas}
@@ -215,25 +192,6 @@ const CodeInput: React.FC<CodeInputProps> = ({
           </div>
           
            <div className="flex items-center gap-2">
-                <div className="flex items-center bg-light-fill-primary dark:bg-dark-fill-primary rounded-full p-0.5">
-                    <button
-                        onClick={() => onGenerate('test')}
-                        disabled={isLoading || !canRunFileActions}
-                        className="p-2 hover:bg-light-fill-secondary dark:hover:bg-dark-fill-secondary text-light-label-primary dark:text-dark-label-primary rounded-full transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Generate Unit Tests"
-                    >
-                        <TestTubeIcon className="h-5 w-5" />
-                    </button>
-                    <div className="w-px h-5 bg-light-separator dark:bg-dark-separator mx-0.5"></div>
-                    <button
-                        onClick={() => onGenerate('docs')}
-                        disabled={isLoading || !canRunFileActions}
-                        className="p-2 hover:bg-light-fill-secondary dark:hover:bg-dark-fill-secondary text-light-label-primary dark:text-dark-label-primary rounded-full transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Generate Documentation"
-                    >
-                        <DocsIcon className="h-5 w-5" />
-                    </button>
-                </div>
               <button
                 onClick={onReview}
                 disabled={isLoading || !canRunActions}

@@ -4,7 +4,7 @@ import type { Content } from "@google/genai";
 import CodeInput from './components/CodeInput';
 import ReviewOutput from './components/ReviewOutput';
 import PreviewModal from './components/PreviewModal';
-import { performCodeReview, sendFollowUpMessage, generateUnitTests, generateDocumentation } from './services/geminiService';
+import { performCodeReview, sendFollowUpMessage, detectLanguage } from './services/geminiService';
 import { HISTORY_STORAGE_KEY, REVIEW_FOCUS_AREAS, AI_PERSONAS, SUPPORTED_LANGUAGES } from './constants';
 import HistorySidebar from './components/HistorySidebar';
 
@@ -65,7 +65,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Review configuration
-  const [language, setLanguage] = useState<string>('javascript');
+  const [language, setLanguage] = useState<string>('auto');
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
   const [persona, setPersona] = useState<string>('mentor');
   
@@ -96,6 +96,41 @@ const App: React.FC = () => {
       setTheme('light');
     }
   }, []);
+
+  // Auto-detect language for snippets
+  useEffect(() => {
+    if (inputMode !== 'snippet') {
+        return;
+    }
+    
+    // If code is cleared, reset to auto-detect mode
+    if (code.trim().length === 0) {
+        setLanguage('auto');
+        return;
+    }
+
+    // Only run when there's enough code to analyze
+    if (code.trim().length < 50) {
+        return;
+    }
+
+    const handler = setTimeout(async () => {
+        try {
+            const detectedLang = await detectLanguage(code);
+            if (detectedLang) {
+                setLanguage(detectedLang);
+            }
+        } catch (e) {
+            console.error("Language detection failed:", e);
+            // Fail silently, keep the last known language
+        }
+    }, 800); // Debounce for 800ms
+
+    return () => {
+        clearTimeout(handler);
+    };
+  }, [code, inputMode]);
+
 
   const saveToHistory = useCallback((updatedConversation: ChatMessage[], files: ProjectFile[]) => {
     if (files.length === 0 || updatedConversation.length === 0) return;
@@ -240,50 +275,6 @@ const App: React.FC = () => {
     }
   }, [conversation, chatHistory, saveToHistory, inputMode, projectFiles, code, language]);
   
-  const handleGenerateAction = useCallback(async (action: 'test' | 'docs') => {
-    let filesToReview: ProjectFile[];
-    let targetPath: string;
-    let targetContent: string;
-
-    if (inputMode === 'snippet') {
-        if (code.trim() === '') return;
-        const extension = SUPPORTED_LANGUAGES.find(l => l.value === language)?.extensions[0] || 'txt';
-        targetPath = `snippet.${extension}`;
-        targetContent = code;
-        filesToReview = [{ path: targetPath, content: targetContent }];
-    } else {
-        if (!activeFilePath) return;
-        const file = projectFiles.find(f => f.path === activeFilePath);
-        if (!file) return;
-        targetPath = activeFilePath;
-        targetContent = file.content;
-        filesToReview = projectFiles;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    setConversation([]);
-    setChatHistory([]);
-
-    const personaInstruction = AI_PERSONAS.find(p => p.value === persona)?.instruction || '';
-
-    try {
-      let result;
-      if (action === 'test') {
-        result = await generateUnitTests(targetContent, language, filesToReview, targetPath, personaInstruction);
-      } else {
-        result = await generateDocumentation(targetContent, language, filesToReview, targetPath, personaInstruction);
-      }
-      const newConversation: ChatMessage[] = [{ role: 'model', content: result.response, prompt: result.userPrompt }];
-      setConversation(newConversation);
-      saveToHistory(newConversation, filesToReview);
-    } catch (err: any) {
-      setError(err.message || 'An unknown error occurred.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [inputMode, activeFilePath, language, persona, code, projectFiles, saveToHistory]);
-
 
   const handleApplyFix = useCallback((before: string, after: string, filePath?: string) => {
     const targetPath = filePath || (inputMode === 'project' ? activeFilePath : '');
@@ -325,6 +316,8 @@ const App: React.FC = () => {
     const detectedLang = SUPPORTED_LANGUAGES.find(lang => lang.extensions.includes(mostCommonExt));
     if (detectedLang) {
       setLanguage(detectedLang.value);
+    } else {
+      setLanguage('auto'); // Fallback
     }
 
     setConversation([]);
@@ -346,6 +339,7 @@ const App: React.FC = () => {
     setError(null);
     setInputMode('snippet');
     setCode('');
+    setLanguage('auto');
   };
   
   const loadFromHistory = (item: HistoryItem) => {
@@ -435,13 +429,11 @@ const App: React.FC = () => {
               onFileSelect={setActiveFilePath}
               onFileContentChange={handleFileContentChange}
               language={language}
-              onLanguageChange={setLanguage}
               focusAreas={focusAreas}
               onFocusAreaChange={setFocusAreas}
               persona={persona}
               onPersonaChange={setPersona}
               onReview={handleReview}
-              onGenerate={handleGenerateAction}
               isLoading={isLoading}
               onProjectImport={handleProjectImport}
               onMenuClick={() => setIsSidebarOpen(true)}

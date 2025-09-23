@@ -1,5 +1,5 @@
 import { GoogleGenAI, Content } from "@google/genai";
-import { REVIEW_FOCUS_AREAS } from '../constants';
+import { REVIEW_FOCUS_AREAS, SUPPORTED_LANGUAGES } from '../constants';
 import type { ReviewFinding, ProjectFile } from '../App';
 
 // Singleton pattern to hold the initialized AI client.
@@ -145,76 +145,6 @@ export const performCodeReview = async (
   }
 };
 
-
-const generateActionPrompt = (
-    code: string,
-    language: string,
-    projectFiles: ProjectFile[],
-    targetFilePath: string,
-    action: 'test' | 'docs'
-): string => {
-    let task: string;
-    const projectContextFiles = projectFiles.filter(f => f.path !== targetFilePath);
-    const hasProjectContext = projectContextFiles.length > 0;
-    
-    const contextPrompt = hasProjectContext 
-        ? `Use the other provided project files for context if needed.\n\n**Full Project Context (for reference):**\n${formatProjectFiles(projectContextFiles)}`
-        : '';
-
-    if (action === 'test') {
-        const framework = (language === 'javascript' || language === 'typescript') ? 'Jest' : 'a suitable standard testing framework for the language';
-        task = `Generate a complete unit test suite for the file \`${targetFilePath}\` using ${framework}. The tests should cover the main functionality, edge cases, and potential error conditions. The response must be ONLY the code, inside a single markdown code block. Do not add any explanation or introductory text.`;
-    } else { // docs
-        const format = (language === 'javascript' || language === 'typescript') ? 'JSDoc' : 'the standard documentation format for the language (e.g., Python Docstrings)';
-        task = `Generate comprehensive documentation for the file \`${targetFilePath}\`. Use the ${format} format. The response must be ONLY the documented code, inside a single markdown code block. Do not add any explanation or introductory text.`;
-    }
-
-    return `${task}
-
-**Target File: \`${targetFilePath}\`**
-\`\`\`${language}
-${code}
-\`\`\`
-
-${contextPrompt}
-`;
-};
-
-const generateAiAction = async (
-  code: string,
-  language: string,
-  projectFiles: ProjectFile[],
-  targetFilePath: string,
-  personaInstruction: string,
-  action: 'test' | 'docs'
-): Promise<{ response: string; userPrompt: string; }> => {
-  try {
-    const localAi = getAiClient();
-    const userPrompt = generateActionPrompt(code, language, projectFiles, targetFilePath, action);
-
-    const result = await localAi.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        config: {
-            systemInstruction: personaInstruction,
-        },
-    });
-
-    return { response: result.text, userPrompt };
-  } catch (error) {
-    console.error(`Error in generateAiAction (${action}):`, error);
-    if (error instanceof Error) throw error;
-    throw new Error(`An unexpected error occurred while generating ${action}.`);
-  }
-};
-
-export const generateUnitTests = (code: string, language: string, projectFiles: ProjectFile[], targetFilePath: string, personaInstruction: string) => 
-    generateAiAction(code, language, projectFiles, targetFilePath, personaInstruction, 'test');
-
-export const generateDocumentation = (code: string, language: string, projectFiles: ProjectFile[], targetFilePath: string, personaInstruction: string) =>
-    generateAiAction(code, language, projectFiles, targetFilePath, personaInstruction, 'docs');
-
-
 export const sendFollowUpMessage = async (
   message: string,
   history: Content[],
@@ -240,4 +170,45 @@ export const sendFollowUpMessage = async (
     console.error("An unexpected error occurred in sendFollowUpMessage:", error);
     throw new Error("An unexpected error occurred while communicating with the AI.");
   }
+};
+
+export const detectLanguage = async (codeSnippet: string): Promise<string | null> => {
+    if (!codeSnippet || codeSnippet.trim().length < 20) {
+        return null; // Not enough code to detect
+    }
+    try {
+        const localAi = getAiClient();
+        const supportedLanguageValues = SUPPORTED_LANGUAGES.map(l => l.value).join(', ');
+
+        const prompt = `Analyze the following code snippet and identify the programming language.
+Your response MUST be a single word from this list: [${supportedLanguageValues}].
+Do not provide any explanation, markdown, or any other text.
+
+Code:
+---
+${codeSnippet.substring(0, 2000)}
+---`;
+
+        const result = await localAi.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            config: {
+                temperature: 0,
+                thinkingConfig: { thinkingBudget: 0 } 
+            }
+        });
+
+        const detectedLang = result.text.trim().toLowerCase();
+        const isValid = SUPPORTED_LANGUAGES.some(l => l.value === detectedLang);
+
+        if (isValid) {
+            return detectedLang;
+        }
+        console.warn(`Language detection returned an unsupported value: "${detectedLang}"`);
+        return null;
+
+    } catch (error) {
+        console.error("Error in detectLanguage:", error);
+        return null;
+    }
 };
